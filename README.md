@@ -2,7 +2,7 @@
 
 A beautiful, modern landing page for Clover, the sustainable fashion app that helps users digitize their closets, track outfits, and build intentional wardrobes.
 
-## 🌱 About Clover
+## About Clover
 
 **A closet you love. A planet you save.**
 
@@ -16,4 +16,4 @@ Clover helps you digitize your closet, track your outfits, and build a wardrobe 
 - **In-store scanning**: Scan barcodes and run real time how it fits in with your closet <Freemium> (coming soon)
 
 
-**Built with ❤️ for sustainable fashion** 
+**Built with <3 for sustainable fashion** 
