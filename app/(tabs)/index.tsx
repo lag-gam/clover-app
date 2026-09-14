@@ -11,8 +11,8 @@ import {
 import { logInteraction } from "@/services/interaction.service";
 import { OutfitCard } from "@/components/OutfitCard";
 import { SwapSheet } from "@/components/SwapSheet";
+import { useStyleProfile } from "@/hooks/useStyleProfile";
 import { Garment } from "@/types/database";
-import { supabase } from "@/lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
 
 interface DisplayOutfit {
@@ -29,6 +29,8 @@ export default function HomeScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [garmentCount, setGarmentCount] = useState(0);
+
+  const { profile, maybeRecalculate, isColdStart } = useStyleProfile();
 
   // Swap sheet state
   const [swapTarget, setSwapTarget] = useState<Garment | null>(null);
@@ -50,13 +52,6 @@ export default function HomeScreen() {
     setLoading(true);
 
     try {
-      // Fetch style embedding if exists
-      const { data: profile } = await supabase
-        .from("style_profiles")
-        .select("style_embedding")
-        .eq("user_id", user.id)
-        .single();
-
       const styleEmbed = profile?.style_embedding as number[] | null;
 
       const garments = await fetchGarments(user.id);
@@ -87,6 +82,9 @@ export default function HomeScreen() {
 
     await logInteraction(user.id, current.savedId, type);
     setCurrentIndex((i) => i + 1);
+
+    // Trigger style recalculation check
+    maybeRecalculate();
   };
 
   const handleGarmentTap = (garment: Garment) => {
@@ -176,6 +174,11 @@ export default function HomeScreen() {
         >
           <Text className="text-white font-semibold">Generate Outfits</Text>
         </TouchableOpacity>
+        {isColdStart && (
+          <Text className="text-xs text-gray-400 mt-3 text-center px-4">
+            Keep rating outfits to improve your recommendations
+          </Text>
+        )}
       </View>
     );
   }
