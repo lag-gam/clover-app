@@ -157,6 +157,7 @@ export interface Outfit {
   name: string | null;
   embedding: number[] | null;
   score: number | null;
+  is_saved: boolean;
   created_at: string;
 }
 

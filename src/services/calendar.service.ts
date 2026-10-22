@@ -13,6 +13,7 @@ export async function fetchSavedOutfits(
     .from("outfits")
     .select(OUTFIT_WITH_ITEMS)
     .eq("user_id", userId)
+    .eq("is_saved", true)
     .order("created_at", { ascending: false });
 
   if (error) throw new Error(`Fetch outfits error: ${error.message}`);

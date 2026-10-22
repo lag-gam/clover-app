@@ -8,7 +8,7 @@ import {
   TouchableWithoutFeedback,
 } from "react-native";
 import { Garment } from "@/types/database";
-import { FlatLayCollage } from "@/components/FlatLayCollage";
+import { FlatLayCollage, FlatLayItem } from "@/components/FlatLayCollage";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
@@ -20,7 +20,7 @@ interface OutfitCardProps {
   onLike: () => void;
   onDislike: () => void;
   onSkip: () => void;
-  onGarmentTap: (garment: Garment) => void;
+  onItemTap: (item: FlatLayItem) => void;
 }
 
 export function OutfitCard({
@@ -29,7 +29,7 @@ export function OutfitCard({
   onLike,
   onDislike,
   onSkip,
-  onGarmentTap,
+  onItemTap,
 }: OutfitCardProps) {
   const pan = useRef(new Animated.ValueXY()).current;
   const lastTap = useRef(0);
@@ -135,7 +135,8 @@ export function OutfitCard({
 
           <FlatLayCollage
             items={garments}
-            onGarmentPress={onGarmentTap}
+            onGarmentPress={() => {}}
+            onItemPress={onItemTap}
             accessibilityLabel="Recommended outfit flat lay"
           />
 

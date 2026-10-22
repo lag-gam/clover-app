@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   ScrollView,
   Text,
@@ -15,11 +16,16 @@ import { supabase } from "@/lib/supabase";
 import { fetchGarments } from "@/services/garment.service";
 import {
   generateOutfitCandidates,
+  getAlternatives,
   OutfitCandidate,
+  saveOutfit,
 } from "@/services/outfit.service";
 import { Garment } from "@/types/database";
-import { FlatLayCollage } from "@/components/FlatLayCollage";
+import { FlatLayCollage, FlatLayItem } from "@/components/FlatLayCollage";
 import { SagModeToggle } from "@/components/SagModeToggle";
+import { OutfitItemActionSheet } from "@/components/OutfitItemActionSheet";
+import { SwapSheet } from "@/components/SwapSheet";
+import { logInteraction } from "@/services/interaction.service";
 
 export default function SeededStyleScreen() {
   const { garmentId } = useLocalSearchParams<{ garmentId: string }>();
@@ -32,6 +38,19 @@ export default function SeededStyleScreen() {
   const [error, setError] = useState<string | null>(null);
   const [generation, setGeneration] = useState(0);
   const [sagMode, setSagMode] = useState(false);
+  const [looks, setLooks] = useState<OutfitCandidate[]>([]);
+  const [action, setAction] = useState<{
+    lookIndex: number;
+    item: FlatLayItem;
+  } | null>(null);
+  const [swapAlternatives, setSwapAlternatives] = useState<Garment[]>([]);
+  const [swapping, setSwapping] = useState(false);
+  const [savingIndex, setSavingIndex] = useState<number | null>(null);
+  const [savedIndexes, setSavedIndexes] = useState<Set<number>>(new Set());
+  const swapTargetRef = useRef<{
+    lookIndex: number;
+    item: FlatLayItem;
+  } | null>(null);
 
   useEffect(() => {
     if (!user || !garmentId) return;
@@ -82,7 +101,7 @@ export default function SeededStyleScreen() {
     };
   }, [garmentId, user]);
 
-  const looks = useMemo(() => {
+  const generatedLooks = useMemo(() => {
     if (!garment || garment.processing_status !== "ready") return [];
 
     return generateOutfitCandidates(
@@ -101,6 +120,95 @@ export default function SeededStyleScreen() {
     profile?.pinterest_embedding,
     profile?.style_embedding,
   ]);
+
+  useEffect(() => {
+    setLooks(generatedLooks);
+    setSavedIndexes(new Set());
+  }, [generatedLooks]);
+
+  const turnItem = () => {
+    if (!action?.item.garment.back_image_url) return;
+    setLooks((current) =>
+      current.map((look, index) =>
+        index !== action.lookIndex
+          ? look
+          : {
+              ...look,
+              garments: look.garments.map((item) =>
+                item.garment.id === action.item.garment.id
+                  ? {
+                      ...item,
+                      display_side:
+                        item.display_side === "back"
+                          ? ("front" as const)
+                          : ("back" as const),
+                    }
+                  : item
+              ),
+            }
+      )
+    );
+    setAction(null);
+  };
+
+  const beginSwap = () => {
+    if (!action) return;
+    const look = looks[action.lookIndex];
+    swapTargetRef.current = action;
+    setSwapAlternatives(
+      getAlternatives(
+        closet,
+        action.item.garment,
+        look.garments.map((item) => item.garment)
+      )
+    );
+    setSwapping(true);
+    setAction(null);
+  };
+
+  const replaceItem = (replacement: Garment) => {
+    if (!action && !swapping) return;
+    const target = swapTargetRef.current;
+    if (!target) return;
+    setLooks((current) =>
+      current.map((look, index) =>
+        index !== target.lookIndex
+          ? look
+          : {
+              ...look,
+              garments: look.garments.map((item) =>
+                item.garment.id === target.item.garment.id
+                  ? {
+                      ...item,
+                      garment: replacement,
+                      display_side: "front",
+                    }
+                  : item
+              ),
+            }
+      )
+    );
+    setSwapping(false);
+    swapTargetRef.current = null;
+  };
+
+  const saveLook = async (index: number) => {
+    if (!user || savingIndex !== null || savedIndexes.has(index)) return;
+    setSavingIndex(index);
+    try {
+      const saved = await saveOutfit(user.id, looks[index], true);
+      await logInteraction(user.id, saved.id, "selected");
+      setSavedIndexes((current) => new Set(current).add(index));
+      Alert.alert("Look saved", "Your edited look is ready for the calendar.");
+    } catch (saveError) {
+      Alert.alert(
+        "Could not save look",
+        saveError instanceof Error ? saveError.message : "Please try again."
+      );
+    } finally {
+      setSavingIndex(null);
+    }
+  };
 
   if (loading || profileLoading) {
     return (
@@ -214,7 +322,10 @@ export default function SeededStyleScreen() {
                 look={look}
                 rank={index + 1}
                 requiredGarmentId={garment.id}
-                onGarmentPress={(id) => router.push(`/garment/${id}`)}
+                onItemPress={(item) => setAction({ lookIndex: index, item })}
+                onSave={() => void saveLook(index)}
+                saving={savingIndex === index}
+                saved={savedIndexes.has(index)}
               />
             ))}
 
@@ -238,6 +349,31 @@ export default function SeededStyleScreen() {
           </View>
         )}
       </View>
+      <OutfitItemActionSheet
+        item={action?.item ?? null}
+        visible={Boolean(action)}
+        onClose={() => setAction(null)}
+        onTurn={action?.item.garment.back_image_url ? turnItem : undefined}
+        onSwap={beginSwap}
+        onView={() => {
+          if (!action) return;
+          const id = action.item.garment.id;
+          setAction(null);
+          router.push(`/garment/${id}`);
+        }}
+      />
+      {swapping && swapTargetRef.current && (
+        <SwapSheet
+          visible
+          currentGarment={swapTargetRef.current.item.garment}
+          alternatives={swapAlternatives}
+          onSwap={replaceItem}
+          onClose={() => {
+            setSwapping(false);
+            swapTargetRef.current = null;
+          }}
+        />
+      )}
     </ScrollView>
   );
 }
@@ -246,12 +382,18 @@ function LookCard({
   look,
   rank,
   requiredGarmentId,
-  onGarmentPress,
+  onItemPress,
+  onSave,
+  saving,
+  saved,
 }: {
   look: OutfitCandidate;
   rank: number;
   requiredGarmentId: string;
-  onGarmentPress: (id: string) => void;
+  onItemPress: (item: FlatLayItem) => void;
+  onSave: () => void;
+  saving: boolean;
+  saved: boolean;
 }) {
   return (
     <View className="mb-4 rounded-2xl bg-white p-4 shadow-sm">
@@ -278,9 +420,21 @@ function LookCard({
       <FlatLayCollage
         items={look.garments}
         featuredGarmentId={requiredGarmentId}
-        onGarmentPress={(item) => onGarmentPress(item.id)}
+        onGarmentPress={() => {}}
+        onItemPress={onItemPress}
         accessibilityLabel={`Look ${rank} flat lay`}
       />
+      <TouchableOpacity
+        disabled={saving || saved}
+        onPress={onSave}
+        className={`mt-3 items-center rounded-xl py-3 ${
+          saved ? "bg-green-100" : "bg-green-600"
+        }`}
+      >
+        <Text className={saved ? "font-bold text-green-800" : "font-bold text-white"}>
+          {saving ? "Saving…" : saved ? "Look saved" : "Save this look"}
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 }

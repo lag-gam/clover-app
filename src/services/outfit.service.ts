@@ -317,7 +317,8 @@ export function generateOutfitCandidates(
 
 export async function saveOutfit(
   userId: string,
-  candidate: OutfitCandidate
+  candidate: OutfitCandidate,
+  isSaved = false
 ): Promise<Outfit> {
   const { supabase } = await import("@/lib/supabase");
   const { data: outfit, error: outfitError } = await supabase
@@ -326,6 +327,7 @@ export async function saveOutfit(
       user_id: userId,
       embedding: candidate.embedding.length > 0 ? candidate.embedding : null,
       score: candidate.score,
+      is_saved: isSaved,
     })
     .select()
     .single();
@@ -389,6 +391,7 @@ export async function saveManualOutfit(
       name: name?.trim() || null,
       embedding,
       score: null,
+      is_saved: true,
     })
     .select()
     .single();
@@ -437,6 +440,18 @@ export async function fetchOutfitWithItems(
     outfit: outfit as Outfit,
     items: items as (OutfitItem & { garment: Garment })[],
   };
+}
+
+export async function updateOutfitItemSide(
+  itemId: string,
+  displaySide: GarmentDisplaySide
+): Promise<void> {
+  const { supabase } = await import("@/lib/supabase");
+  const { error } = await supabase
+    .from("outfit_items")
+    .update({ display_side: displaySide })
+    .eq("id", itemId);
+  if (error) throw new Error(`Turn item error: ${error.message}`);
 }
 
 export function getAlternatives(

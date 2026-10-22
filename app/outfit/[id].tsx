@@ -8,11 +8,15 @@ import {
   Alert,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { fetchOutfitWithItems } from "@/services/outfit.service";
+import {
+  fetchOutfitWithItems,
+  updateOutfitItemSide,
+} from "@/services/outfit.service";
 import { logInteraction } from "@/services/interaction.service";
 import { useAuth } from "@/hooks/useAuth";
 import { Garment, Outfit, OutfitItem } from "@/types/database";
-import { FlatLayCollage } from "@/components/FlatLayCollage";
+import { FlatLayCollage, FlatLayItem } from "@/components/FlatLayCollage";
+import { OutfitItemActionSheet } from "@/components/OutfitItemActionSheet";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function OutfitDetailScreen() {
@@ -25,6 +29,7 @@ export default function OutfitDetailScreen() {
   const [outfit, setOutfit] = useState<Outfit | null>(null);
   const [items, setItems] = useState<(OutfitItem & { garment: Garment })[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actionItem, setActionItem] = useState<FlatLayItem | null>(null);
 
   useEffect(() => {
     loadOutfit();
@@ -71,9 +76,8 @@ export default function OutfitDetailScreen() {
       <View className="px-4 py-6">
         <FlatLayCollage
           items={items}
-          onGarmentPress={(garment) =>
-            router.push(`/garment/${garment.id}`)
-          }
+          onGarmentPress={() => {}}
+          onItemPress={setActionItem}
           accessibilityLabel="Saved outfit flat lay"
         />
       </View>
@@ -117,6 +121,46 @@ export default function OutfitDetailScreen() {
           <Text className="text-white font-semibold">Mark as Worn</Text>
         </TouchableOpacity>
       </View>
+      <OutfitItemActionSheet
+        item={actionItem}
+        visible={Boolean(actionItem)}
+        onClose={() => setActionItem(null)}
+        onTurn={
+          actionItem?.garment.back_image_url
+            ? () => {
+                const item = items.find(
+                  (candidate) => candidate.garment_id === actionItem.garment.id
+                );
+                if (!item) return;
+                const next =
+                  item.display_side === "back" ? "front" : "back";
+                void updateOutfitItemSide(item.id, next)
+                  .then(() =>
+                    setItems((current) =>
+                      current.map((candidate) =>
+                        candidate.id === item.id
+                          ? { ...candidate, display_side: next }
+                          : candidate
+                      )
+                    )
+                  )
+                  .catch((error: unknown) =>
+                    Alert.alert(
+                      "Could not turn item",
+                      error instanceof Error ? error.message : "Please try again."
+                    )
+                  );
+                setActionItem(null);
+              }
+            : undefined
+        }
+        onView={() => {
+          if (!actionItem) return;
+          const garmentId = actionItem.garment.id;
+          setActionItem(null);
+          router.push(`/garment/${garmentId}`);
+        }}
+      />
     </ScrollView>
   );
 }

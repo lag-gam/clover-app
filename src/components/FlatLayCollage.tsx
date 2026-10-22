@@ -27,6 +27,7 @@ type Placement = {
 interface FlatLayCollageProps {
   items: FlatLayItem[];
   onGarmentPress: (garment: Garment) => void;
+  onItemPress?: (item: FlatLayItem) => void;
   showLabels?: boolean;
   accessibilityLabel?: string;
   featuredGarmentId?: string;
@@ -119,6 +120,7 @@ function basePlacement(
 export function FlatLayCollage({
   items,
   onGarmentPress,
+  onItemPress,
   showLabels = true,
   accessibilityLabel = "Flat-lay outfit",
   featuredGarmentId,
@@ -171,7 +173,9 @@ export function FlatLayCollage({
               accessibilityLabel={`${item.garment.name}, ${
                 item.display_side === "back" ? "back" : "front"
               }, ${item.slot.replace(":", " ")}`}
-              onPress={() => onGarmentPress(item.garment)}
+              onPress={() =>
+                onItemPress ? onItemPress(item) : onGarmentPress(item.garment)
+              }
               hitSlop={4}
               style={{
                 position: "absolute",
@@ -200,19 +204,23 @@ export function FlatLayCollage({
 
       {showLabels && (
         <View className="mt-2 flex-row flex-wrap justify-center gap-1">
-          {items.map(({ garment, slot, display_side }) => (
+          {items.map((item) => (
             <Pressable
-              key={`label:${slot}:${garment.id}`}
-              onPress={() => onGarmentPress(garment)}
+              key={`label:${item.slot}:${item.garment.id}`}
+              onPress={() =>
+                onItemPress
+                  ? onItemPress(item)
+                  : onGarmentPress(item.garment)
+              }
               accessibilityRole="button"
               className="rounded-full bg-stone-100 px-2 py-1"
             >
               <Text className="text-[10px] text-stone-600" numberOfLines={1}>
-                {garment.id === featuredGarmentId
+                {item.garment.id === featuredGarmentId
                   ? "featured item"
-                  : slot.split(":").join(" ")}{" "}
-                · {garment.name}
-                {display_side === "back" ? " · back" : ""}
+                  : item.slot.split(":").join(" ")}{" "}
+                · {item.garment.name}
+                {item.display_side === "back" ? " · back" : ""}
               </Text>
             </Pressable>
           ))}

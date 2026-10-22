@@ -13,7 +13,11 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { FlatLayCollage } from "@/components/FlatLayCollage";
+import {
+  FlatLayCollage,
+  FlatLayItem,
+} from "@/components/FlatLayCollage";
+import { OutfitItemActionSheet } from "@/components/OutfitItemActionSheet";
 import { CATEGORIES, SUBTYPES_BY_CATEGORY } from "@/constants/categories";
 import { useAuth } from "@/hooks/useAuth";
 import { fetchGarments } from "@/services/garment.service";
@@ -24,6 +28,7 @@ import {
 import {
   Garment,
   GarmentCategory,
+  GarmentDisplaySide,
   GarmentSubtype,
 } from "@/types/database";
 
@@ -44,6 +49,10 @@ export default function CreateOutfitScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [displaySides, setDisplaySides] = useState<
+    Record<string, GarmentDisplaySide>
+  >({});
+  const [actionItem, setActionItem] = useState<FlatLayItem | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -77,8 +86,9 @@ export default function CreateOutfitScreen() {
       selected.map((garment) => ({
         garment,
         slot: inferOutfitSlot(garment),
+        display_side: displaySides[garment.id] ?? "front",
       })),
-    [selected]
+    [displaySides, selected]
   );
 
   const toggleGarment = (garment: Garment) => {
@@ -113,7 +123,12 @@ export default function CreateOutfitScreen() {
     if (!user || selected.length < 2) return;
     setSaving(true);
     try {
-      const outfit = await saveManualOutfit(user.id, selected, name);
+      const outfit = await saveManualOutfit(
+        user.id,
+        selected,
+        name,
+        displaySides
+      );
       router.replace({
         pathname: "/outfit/[id]",
         params: { id: outfit.id, justSaved: "1" },
@@ -155,7 +170,8 @@ export default function CreateOutfitScreen() {
         {selected.length > 0 ? (
           <FlatLayCollage
             items={collageItems}
-            onGarmentPress={toggleGarment}
+            onGarmentPress={() => {}}
+            onItemPress={setActionItem}
             accessibilityLabel={`Outfit preview with ${selected.length} garments`}
           />
         ) : (
@@ -301,15 +317,16 @@ export default function CreateOutfitScreen() {
   }
 
   return (
-    <FlatList
-      className="flex-1 bg-white"
-      data={filteredGarments}
-      numColumns={3}
-      keyExtractor={(item) => item.id}
-      ListHeaderComponent={header}
-      contentContainerClassName="pb-8"
-      columnWrapperClassName="px-2"
-      renderItem={({ item }) => {
+    <>
+      <FlatList
+        className="flex-1 bg-white"
+        data={filteredGarments}
+        numColumns={3}
+        keyExtractor={(item) => item.id}
+        ListHeaderComponent={header}
+        contentContainerClassName="pb-8"
+        columnWrapperClassName="px-2"
+        renderItem={({ item }) => {
         const isSelected = selectedIds.has(item.id);
         return (
           <Pressable
@@ -344,9 +361,9 @@ export default function CreateOutfitScreen() {
             </Text>
           </Pressable>
         );
-      }}
-      ListEmptyComponent={
-        <View className="items-center px-8 py-16">
+        }}
+        ListEmptyComponent={
+          <View className="items-center px-8 py-16">
           <Ionicons name="shirt-outline" size={40} color="#d6d3d1" />
           <Text className="mt-3 text-center font-semibold text-stone-500">
             {loadError
@@ -361,8 +378,40 @@ export default function CreateOutfitScreen() {
                 ? "Add garments and wait for processing to finish."
                 : "Try another category or subtype.")}
           </Text>
-        </View>
-      }
-    />
+          </View>
+        }
+      />
+      <OutfitItemActionSheet
+        item={actionItem}
+        visible={Boolean(actionItem)}
+        onClose={() => setActionItem(null)}
+        onTurn={
+          actionItem?.garment.back_image_url
+            ? () => {
+                const next =
+                  actionItem.display_side === "back" ? "front" : "back";
+                setDisplaySides((current) => ({
+                  ...current,
+                  [actionItem.garment.id]: next,
+                }));
+                setActionItem(null);
+              }
+            : undefined
+        }
+        onView={() => {
+          if (!actionItem) return;
+          const garmentId = actionItem.garment.id;
+          setActionItem(null);
+          router.push(`/garment/${garmentId}`);
+        }}
+        onRemove={() => {
+          if (!actionItem) return;
+          setSelected((current) =>
+            current.filter((item) => item.id !== actionItem.garment.id)
+          );
+          setActionItem(null);
+        }}
+      />
+    </>
   );
 }

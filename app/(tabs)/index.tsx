@@ -1,5 +1,11 @@
 import { useState, useCallback } from "react";
-import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+} from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useAuth } from "@/hooks/useAuth";
 import { fetchGarments } from "@/services/garment.service";
@@ -7,19 +13,21 @@ import {
   generateOutfitCandidates,
   saveOutfit,
   getAlternatives,
+  OutfitCandidate,
 } from "@/services/outfit.service";
 import { logInteraction } from "@/services/interaction.service";
 import { OutfitCard } from "@/components/OutfitCard";
+import {
+  FlatLayItem,
+} from "@/components/FlatLayCollage";
+import { OutfitItemActionSheet } from "@/components/OutfitItemActionSheet";
 import { SwapSheet } from "@/components/SwapSheet";
 import { SagModeToggle } from "@/components/SagModeToggle";
 import { useStyleProfile } from "@/hooks/useStyleProfile";
 import { Garment } from "@/types/database";
 import { Ionicons } from "@expo/vector-icons";
 
-interface DisplayOutfit {
-  garments: { garment: Garment; slot: string }[];
-  embedding: number[];
-  score: number;
+interface DisplayOutfit extends OutfitCandidate {
   savedId?: string;
 }
 
@@ -33,6 +41,9 @@ export default function HomeScreen() {
   const [garmentCount, setGarmentCount] = useState(0);
   const [sagMode, setSagMode] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
+  const [actionItem, setActionItem] = useState<FlatLayItem | null>(null);
+  const [savingOutfit, setSavingOutfit] = useState(false);
+  const [savedIndexes, setSavedIndexes] = useState<Set<number>>(new Set());
 
   const { profile, maybeRecalculate, isColdStart } = useStyleProfile();
 
@@ -88,6 +99,7 @@ export default function HomeScreen() {
 
       setOutfits(saved);
       setCurrentIndex(0);
+      setSavedIndexes(new Set());
     } catch (e) {
       console.error("Generation error:", e);
     } finally {
@@ -110,10 +122,11 @@ export default function HomeScreen() {
     setSagMode(value);
     setOutfits([]);
     setCurrentIndex(0);
+    setSavedIndexes(new Set());
     setGenerationError(null);
   };
 
-  const handleGarmentTap = (garment: Garment) => {
+  const beginSwap = (garment: Garment) => {
     const current = outfits[currentIndex];
     if (!current) return;
 
@@ -121,6 +134,7 @@ export default function HomeScreen() {
     const alts = getAlternatives(allGarments, garment, outfitGarments);
     setSwapTarget(garment);
     setSwapAlternatives(alts);
+    setActionItem(null);
   };
 
   const handleSwap = async (replacement: Garment) => {
@@ -141,7 +155,7 @@ export default function HomeScreen() {
     // Update the current outfit in state
     const updatedGarments = current.garments.map((item) =>
       item.garment.id === swapTarget.id
-        ? { ...item, garment: replacement }
+        ? { ...item, garment: replacement, display_side: "front" as const }
         : item
     );
 
@@ -154,6 +168,50 @@ export default function HomeScreen() {
 
     setSwapTarget(null);
     setSwapAlternatives([]);
+  };
+
+  const turnActionItem = () => {
+    const current = outfits[currentIndex];
+    if (!current || !actionItem?.garment.back_image_url) return;
+    const updated = current.garments.map((item) =>
+      item.garment.id === actionItem.garment.id
+        ? {
+            ...item,
+            display_side:
+              item.display_side === "back"
+                ? ("front" as const)
+                : ("back" as const),
+          }
+        : item
+    );
+    setOutfits((existing) =>
+      existing.map((outfit, index) =>
+        index === currentIndex ? { ...outfit, garments: updated } : outfit
+      )
+    );
+    setActionItem(null);
+  };
+
+  const saveCurrent = async () => {
+    const current = outfits[currentIndex];
+    if (!current || !user || savingOutfit || savedIndexes.has(currentIndex)) {
+      return;
+    }
+    setSavingOutfit(true);
+    try {
+      const saved = await saveOutfit(user.id, current, true);
+      await logInteraction(user.id, saved.id, "selected");
+      setSavedIndexes((indexes) => new Set(indexes).add(currentIndex));
+      Alert.alert("Outfit saved", "Your edited outfit is ready for the calendar.");
+      maybeRecalculate();
+    } catch (error) {
+      Alert.alert(
+        "Could not save outfit",
+        error instanceof Error ? error.message : "Please try again."
+      );
+    } finally {
+      setSavingOutfit(false);
+    }
   };
 
   const manualBuilderButton = (
@@ -253,8 +311,30 @@ export default function HomeScreen() {
         onLike={() => handleInteraction("liked")}
         onDislike={() => handleInteraction("disliked")}
         onSkip={() => handleInteraction("skipped")}
-        onGarmentTap={handleGarmentTap}
+        onItemTap={setActionItem}
       />
+
+      <TouchableOpacity
+        disabled={savingOutfit || savedIndexes.has(currentIndex)}
+        onPress={() => void saveCurrent()}
+        className={`mx-4 mt-3 items-center rounded-xl py-3 ${
+          savedIndexes.has(currentIndex) ? "bg-green-100" : "bg-green-600"
+        }`}
+      >
+        <Text
+          className={
+            savedIndexes.has(currentIndex)
+              ? "font-bold text-green-800"
+              : "font-bold text-white"
+          }
+        >
+          {savingOutfit
+            ? "Saving…"
+            : savedIndexes.has(currentIndex)
+              ? "Outfit saved"
+              : "Save outfit"}
+        </Text>
+      </TouchableOpacity>
 
       {/* Swap sheet */}
       {swapTarget && (
@@ -266,6 +346,23 @@ export default function HomeScreen() {
           onClose={() => setSwapTarget(null)}
         />
       )}
+      <OutfitItemActionSheet
+        item={actionItem}
+        visible={Boolean(actionItem)}
+        onClose={() => setActionItem(null)}
+        onTurn={
+          actionItem?.garment.back_image_url ? turnActionItem : undefined
+        }
+        onSwap={() => {
+          if (actionItem) beginSwap(actionItem.garment);
+        }}
+        onView={() => {
+          if (!actionItem) return;
+          const garmentId = actionItem.garment.id;
+          setActionItem(null);
+          router.push(`/garment/${garmentId}`);
+        }}
+      />
     </View>
   );
 }
