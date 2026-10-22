@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useAuth } from "@/hooks/useAuth";
 import { fetchGarments } from "@/services/garment.service";
 import {
@@ -24,6 +24,7 @@ interface DisplayOutfit {
 }
 
 export default function HomeScreen() {
+  const router = useRouter();
   const { user } = useAuth();
   const [allGarments, setAllGarments] = useState<Garment[]>([]);
   const [outfits, setOutfits] = useState<DisplayOutfit[]>([]);
@@ -155,6 +156,19 @@ export default function HomeScreen() {
     setSwapAlternatives([]);
   };
 
+  const manualBuilderButton = (
+    <TouchableOpacity
+      accessibilityRole="button"
+      onPress={() => router.push("/outfit/create")}
+      className="mt-4 flex-row items-center justify-center rounded-xl border border-green-200 bg-green-50 px-5 py-3"
+    >
+      <Ionicons name="add-circle-outline" size={20} color="#15803d" />
+      <Text className="ml-2 font-semibold text-green-700">
+        Create your own outfit
+      </Text>
+    </TouchableOpacity>
+  );
+
   // Not enough garments
   if (garmentCount < 3) {
     return (
@@ -166,6 +180,7 @@ export default function HomeScreen() {
         <Text className="text-sm text-gray-300 mt-1">
           You have {garmentCount} garment{garmentCount !== 1 ? "s" : ""}
         </Text>
+        {manualBuilderButton}
       </View>
     );
   }
@@ -207,6 +222,7 @@ export default function HomeScreen() {
         >
           <Text className="text-white font-semibold">Generate Outfits</Text>
         </TouchableOpacity>
+        {manualBuilderButton}
         {isColdStart && (
           <Text className="text-xs text-gray-400 mt-3 text-center px-4">
             Keep rating outfits to improve your recommendations
@@ -228,6 +244,7 @@ export default function HomeScreen() {
         <View className="mt-2">
           <SagModeToggle value={sagMode} onValueChange={handleSagModeChange} />
         </View>
+        {manualBuilderButton}
       </View>
 
       <OutfitCard

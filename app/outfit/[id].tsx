@@ -57,6 +57,13 @@ export default function OutfitDetailScreen() {
 
   return (
     <ScrollView className="flex-1 bg-white">
+      {outfit.name && (
+        <View className="px-4 pt-5">
+          <Text className="text-center text-2xl font-bold text-stone-900">
+            {outfit.name}
+          </Text>
+        </View>
+      )}
       <View className="px-4 py-6">
         <FlatLayCollage
           items={items}

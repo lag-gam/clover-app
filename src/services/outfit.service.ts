@@ -1,4 +1,9 @@
-import { Garment, Outfit, OutfitItem } from "@/types/database";
+import {
+  Garment,
+  GarmentCategory,
+  Outfit,
+  OutfitItem,
+} from "@/types/database";
 import { averageVectors, cosineSimilarity } from "@/utils/math";
 
 export interface OutfitCandidate {
@@ -11,6 +16,26 @@ export interface OutfitCandidate {
 
 export interface OutfitGenerationOptions {
   sagMode?: boolean;
+}
+
+const SINGLETON_SLOTS: Record<
+  Exclude<GarmentCategory, "accessories">,
+  string
+> = {
+  tops: "top",
+  bottoms: "bottom",
+  dresses: "dress",
+  outerwear: "outerwear",
+  shoes: "shoes",
+  underwear: "underwear",
+};
+
+export function inferOutfitSlot(garment: Garment): string {
+  if (garment.category !== "accessories") {
+    return SINGLETON_SLOTS[garment.category];
+  }
+
+  return `accessory:${garment.subtype ?? "other"}:${garment.id}`;
 }
 
 function shuffle<T>(arr: T[]): T[] {
@@ -314,6 +339,69 @@ export async function saveOutfit(
 
   if (itemsError)
     throw new Error(`Save outfit items error: ${itemsError.message}`);
+
+  return outfit as Outfit;
+}
+
+export async function saveManualOutfit(
+  userId: string,
+  garments: Garment[],
+  name?: string
+): Promise<Outfit> {
+  const uniqueGarments = [
+    ...new Map(garments.map((garment) => [garment.id, garment])).values(),
+  ];
+  if (uniqueGarments.length !== garments.length) {
+    throw new Error("An outfit cannot contain the same garment more than once.");
+  }
+  if (uniqueGarments.length < 2) {
+    throw new Error("Choose at least two garments for your outfit.");
+  }
+  if (uniqueGarments.some((garment) => garment.processing_status !== "ready")) {
+    throw new Error("Only ready garments can be added to an outfit.");
+  }
+
+  const singletonSlots = new Set<string>();
+  for (const garment of uniqueGarments) {
+    const slot = inferOutfitSlot(garment);
+    if (!slot.startsWith("accessory") && singletonSlots.has(slot)) {
+      throw new Error(`Choose only one garment for the ${slot} slot.`);
+    }
+    singletonSlots.add(slot);
+  }
+
+  const embeddings = uniqueGarments
+    .map((garment) => garment.embedding)
+    .filter((embedding): embedding is number[] => embedding !== null);
+  const embedding = embeddings.length > 0 ? averageVectors(embeddings) : null;
+  const { supabase } = await import("@/lib/supabase");
+  const { data: outfit, error: outfitError } = await supabase
+    .from("outfits")
+    .insert({
+      user_id: userId,
+      name: name?.trim() || null,
+      embedding,
+      score: null,
+    })
+    .select()
+    .single();
+
+  if (outfitError) {
+    throw new Error(`Save outfit error: ${outfitError.message}`);
+  }
+
+  const { error: itemsError } = await supabase.from("outfit_items").insert(
+    uniqueGarments.map((garment) => ({
+      outfit_id: outfit.id,
+      garment_id: garment.id,
+      slot: inferOutfitSlot(garment),
+    }))
+  );
+
+  if (itemsError) {
+    await supabase.from("outfits").delete().eq("id", outfit.id);
+    throw new Error(`Save outfit items error: ${itemsError.message}`);
+  }
 
   return outfit as Outfit;
 }

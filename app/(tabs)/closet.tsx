@@ -249,6 +249,16 @@ export default function ClosetScreen() {
             </View>
           )}
         </View>
+        <TouchableOpacity
+          accessibilityRole="button"
+          onPress={() => router.push("/outfit/create")}
+          className="mt-3 flex-row items-center justify-center rounded-xl bg-green-600 py-3"
+        >
+          <Ionicons name="layers-outline" size={18} color="#ffffff" />
+          <Text className="ml-2 text-sm font-bold text-white">
+            Create your own outfit
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {error && (
