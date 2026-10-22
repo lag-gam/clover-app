@@ -10,8 +10,8 @@ export function getClosetLayout(
   return {
     pageWidth: Math.max(280, Math.floor(viewportWidth)),
     imageHeight: Math.max(
-      360,
-      Math.min(620, Math.round(viewportHeight * 0.67))
+      320,
+      Math.min(540, Math.round(viewportHeight * 0.57))
     ),
   };
 }
