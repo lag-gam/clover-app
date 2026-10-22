@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
 import { supabase } from "@/lib/supabase";
 import {
   updateGarment,
@@ -16,21 +17,28 @@ import {
   retryGarmentProcessing,
   GarmentMetadataInput,
   isGarmentProcessingStale,
+  uploadGarmentBackImage,
 } from "@/services/garment.service";
 import { MetadataEditor } from "@/components/MetadataEditor";
 import { Garment } from "@/types/database";
 import { FORMALITY_LABELS } from "@/constants/categories";
 import { Ionicons } from "@expo/vector-icons";
+import { useAuth } from "@/hooks/useAuth";
+import { GarmentDisplaySide } from "@/types/database";
 
 export default function GarmentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { user } = useAuth();
   const [garment, setGarment] = useState<Garment | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState<GarmentMetadataInput | null>(null);
   const [saving, setSaving] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [displaySide, setDisplaySide] =
+    useState<GarmentDisplaySide>("front");
+  const [uploadingBack, setUploadingBack] = useState(false);
 
   useEffect(() => {
     void loadGarment();
@@ -144,6 +152,69 @@ export default function GarmentDetailScreen() {
     ]);
   };
 
+  const chooseBackPhoto = () => {
+    Alert.alert(
+      garment?.back_image_url ? "Replace back photo" : "Add back photo",
+      "Choose a source. Your photo will not be cropped.",
+      [
+        {
+          text: "Camera",
+          onPress: () => void pickBackPhoto("camera"),
+        },
+        {
+          text: "Photo Library",
+          onPress: () => void pickBackPhoto("library"),
+        },
+        { text: "Cancel", style: "cancel" },
+      ]
+    );
+  };
+
+  const pickBackPhoto = async (source: "camera" | "library") => {
+    if (!garment || !user || uploadingBack) return;
+    try {
+      if (source === "camera") {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) {
+          Alert.alert(
+            "Camera permission required",
+            "Allow camera access to photograph the back of this garment."
+          );
+          return;
+        }
+      }
+      const result =
+        source === "camera"
+          ? await ImagePicker.launchCameraAsync({
+              mediaTypes: ["images"],
+              allowsEditing: false,
+              quality: 1,
+            })
+          : await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ["images"],
+              allowsEditing: false,
+              quality: 1,
+            });
+      if (result.canceled) return;
+
+      setUploadingBack(true);
+      const updated = await uploadGarmentBackImage(
+        garment.id,
+        result.assets[0].uri,
+        user.id
+      );
+      setGarment(updated);
+      setDisplaySide("back");
+    } catch (error) {
+      Alert.alert(
+        "Could not add back photo",
+        error instanceof Error ? error.message : "Please try again."
+      );
+    } finally {
+      setUploadingBack(false);
+    }
+  };
+
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-white">
@@ -187,13 +258,77 @@ export default function GarmentDetailScreen() {
     <ScrollView className="flex-1 bg-white">
       <View className="h-80 bg-gray-100 items-center justify-center">
         <Image
-          source={{ uri: garment.cutout_url ?? garment.image_url }}
+          source={{
+            uri:
+              displaySide === "back" && garment.back_image_url
+                ? garment.back_cutout_url ?? garment.back_image_url
+                : garment.cutout_url ?? garment.image_url,
+          }}
           className="h-72 w-72"
           resizeMode="contain"
         />
       </View>
 
       <View className="px-4 pt-4">
+        <View className="mb-4 flex-row gap-2">
+          <TouchableOpacity
+            onPress={() => setDisplaySide("front")}
+            className={`flex-1 items-center rounded-xl py-2.5 ${
+              displaySide === "front" ? "bg-clover-600" : "bg-gray-100"
+            }`}
+          >
+            <Text
+              className={
+                displaySide === "front"
+                  ? "font-semibold text-white"
+                  : "font-semibold text-gray-600"
+              }
+            >
+              Front
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            disabled={!garment.back_image_url}
+            onPress={() => setDisplaySide("back")}
+            className={`flex-1 items-center rounded-xl py-2.5 ${
+              displaySide === "back"
+                ? "bg-clover-600"
+                : garment.back_image_url
+                  ? "bg-gray-100"
+                  : "bg-gray-50"
+            }`}
+          >
+            <Text
+              className={
+                displaySide === "back"
+                  ? "font-semibold text-white"
+                  : garment.back_image_url
+                    ? "font-semibold text-gray-600"
+                    : "font-semibold text-gray-300"
+              }
+            >
+              Back
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <TouchableOpacity
+          disabled={uploadingBack}
+          onPress={chooseBackPhoto}
+          className="mb-5 flex-row items-center justify-center rounded-xl border border-clover-200 bg-clover-50 py-3"
+        >
+          {uploadingBack ? (
+            <ActivityIndicator size="small" color="#15803d" />
+          ) : (
+            <Ionicons name="camera-outline" size={19} color="#15803d" />
+          )}
+          <Text className="ml-2 font-semibold text-clover-700">
+            {uploadingBack
+              ? "Adding back photo…"
+              : garment.back_image_url
+                ? "Replace Back photo"
+                : "Add Back photo"}
+          </Text>
+        </TouchableOpacity>
         {garment.processing_status !== "ready" && (
           <View
             className={`rounded-lg p-4 mb-4 ${

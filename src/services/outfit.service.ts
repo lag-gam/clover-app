@@ -1,13 +1,18 @@
 import {
   Garment,
   GarmentCategory,
+  GarmentDisplaySide,
   Outfit,
   OutfitItem,
 } from "@/types/database";
 import { averageVectors, cosineSimilarity } from "@/utils/math";
 
 export interface OutfitCandidate {
-  garments: { garment: Garment; slot: string }[];
+  garments: {
+    garment: Garment;
+    slot: string;
+    display_side?: GarmentDisplaySide;
+  }[];
   embedding: number[];
   score: number;
   pinterestInformed: boolean;
@@ -331,6 +336,7 @@ export async function saveOutfit(
     outfit_id: outfit.id,
     garment_id: item.garment.id,
     slot: item.slot,
+    display_side: item.display_side ?? "front",
   }));
 
   const { error: itemsError } = await supabase
@@ -346,7 +352,8 @@ export async function saveOutfit(
 export async function saveManualOutfit(
   userId: string,
   garments: Garment[],
-  name?: string
+  name?: string,
+  displaySides: Record<string, GarmentDisplaySide> = {}
 ): Promise<Outfit> {
   const uniqueGarments = [
     ...new Map(garments.map((garment) => [garment.id, garment])).values(),
@@ -395,6 +402,7 @@ export async function saveManualOutfit(
       outfit_id: outfit.id,
       garment_id: garment.id,
       slot: inferOutfitSlot(garment),
+      display_side: displaySides[garment.id] ?? "front",
     }))
   );
 

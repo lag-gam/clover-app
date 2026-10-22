@@ -1,7 +1,18 @@
 import { Image, Pressable, Text, View } from "react-native";
-import { Garment } from "@/types/database";
+import { Garment, GarmentDisplaySide } from "@/types/database";
 
-export type FlatLayItem = { garment: Garment; slot: string };
+export type FlatLayItem = {
+  garment: Garment;
+  slot: string;
+  display_side?: GarmentDisplaySide;
+};
+
+export function garmentImageForSide(item: FlatLayItem): string {
+  if (item.display_side === "back" && item.garment.back_image_url) {
+    return item.garment.back_cutout_url ?? item.garment.back_image_url;
+  }
+  return item.garment.cutout_url ?? item.garment.image_url;
+}
 
 type Percent = `${number}%`;
 type Placement = {
@@ -157,7 +168,9 @@ export function FlatLayCollage({
             <Pressable
               key={`${item.slot}:${item.garment.id}`}
               accessibilityRole="button"
-              accessibilityLabel={`${item.garment.name}, ${item.slot.replace(":", " ")}`}
+              accessibilityLabel={`${item.garment.name}, ${
+                item.display_side === "back" ? "back" : "front"
+              }, ${item.slot.replace(":", " ")}`}
               onPress={() => onGarmentPress(item.garment)}
               hitSlop={4}
               style={{
@@ -174,7 +187,7 @@ export function FlatLayCollage({
             >
               <Image
                 source={{
-                  uri: item.garment.cutout_url ?? item.garment.image_url,
+                  uri: garmentImageForSide(item),
                 }}
                 accessibilityIgnoresInvertColors
                 resizeMode="contain"
@@ -187,7 +200,7 @@ export function FlatLayCollage({
 
       {showLabels && (
         <View className="mt-2 flex-row flex-wrap justify-center gap-1">
-          {items.map(({ garment, slot }) => (
+          {items.map(({ garment, slot, display_side }) => (
             <Pressable
               key={`label:${slot}:${garment.id}`}
               onPress={() => onGarmentPress(garment)}
@@ -199,6 +212,7 @@ export function FlatLayCollage({
                   ? "featured item"
                   : slot.split(":").join(" ")}{" "}
                 · {garment.name}
+                {display_side === "back" ? " · back" : ""}
               </Text>
             </Pressable>
           ))}

@@ -128,6 +128,54 @@ export function queueGarmentProcessing(garmentId: string): void {
     .catch(() => markDispatchFailed(garmentId));
 }
 
+export async function uploadGarmentBackImage(
+  garmentId: string,
+  imageUri: string,
+  userId: string
+): Promise<Garment> {
+  const compressedUri = await compressImage(imageUri);
+  const objectPath = `${userId}/${garmentId}_back_original.jpg`;
+  const imageBlob = await getImageBlob(compressedUri);
+  const { error: uploadError } = await supabase.storage
+    .from("garment-images")
+    .upload(objectPath, imageBlob, {
+      contentType: "image/jpeg",
+      upsert: true,
+    });
+  if (uploadError) {
+    throw new Error(`Back photo upload error: ${uploadError.message}`);
+  }
+
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from("garment-images").getPublicUrl(objectPath);
+  const { data, error } = await supabase
+    .from("garments")
+    .update({
+      back_image_url: publicUrl,
+      back_cutout_url: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", garmentId)
+    .eq("user_id", userId)
+    .select()
+    .single();
+  if (error) {
+    throw new Error(`Back photo save error: ${error.message}`);
+  }
+
+  const { error: processingError } = await supabase.functions.invoke(
+    "process-garment",
+    { body: { garmentId, mode: "back" } }
+  );
+  if (processingError) {
+    throw new Error(
+      `Back photo processing could not start: ${processingError.message}`
+    );
+  }
+  return data as Garment;
+}
+
 async function markDispatchFailed(garmentId: string): Promise<void> {
   const { error } = await supabase
     .from("garments")

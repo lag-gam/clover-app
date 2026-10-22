@@ -97,6 +97,8 @@ export type GarmentProcessingStatus =
   | "ready"
   | "failed";
 
+export type GarmentDisplaySide = "front" | "back";
+
 export type ClosetSectionKind = "rail" | "shelf" | "drawer";
 
 export type InteractionType =
@@ -124,6 +126,8 @@ export interface Garment {
   formality: Formality;
   image_url: string;
   cutout_url: string | null;
+  back_image_url: string | null;
+  back_cutout_url: string | null;
   embedding: number[] | null;
   tags: string[];
   processing_status: GarmentProcessingStatus;
@@ -161,6 +165,7 @@ export interface OutfitItem {
   outfit_id: string;
   garment_id: string;
   slot: string;
+  display_side: GarmentDisplaySide;
   garment?: Garment;
 }
 

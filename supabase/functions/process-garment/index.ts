@@ -149,14 +149,20 @@ Deno.serve(async (request) => {
   }
 
   let garmentId: string | undefined;
+  let mode: "front" | "back" = "front";
   try {
-    garmentId = (await request.json()).garmentId;
+    const body = await request.json();
+    garmentId = body.garmentId;
+    mode = body.mode ?? "front";
   } catch {
     return json({ error: "Invalid JSON body" }, 400);
   }
 
   if (!garmentId || !/^[0-9a-f-]{36}$/i.test(garmentId)) {
     return json({ error: "A valid garmentId is required" }, 400);
+  }
+  if (mode !== "front" && mode !== "back") {
+    return json({ error: "mode must be front or back" }, 400);
   }
 
   const serviceClient = createClient(
@@ -166,7 +172,7 @@ Deno.serve(async (request) => {
   );
   const { data: garment } = await serviceClient
     .from("garments")
-    .select("id")
+    .select("id, back_image_url")
     .eq("id", garmentId)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -175,9 +181,68 @@ Deno.serve(async (request) => {
     return json({ error: "Garment not found" }, 404);
   }
 
-  EdgeRuntime.waitUntil(processGarment(serviceClient, garmentId, user.id));
+  if (mode === "back") {
+    if (!garment.back_image_url) {
+      return json({ error: "Back image not found" }, 409);
+    }
+    EdgeRuntime.waitUntil(
+      processBackImage(
+        serviceClient,
+        garmentId,
+        user.id,
+        garment.back_image_url,
+      ),
+    );
+  } else {
+    EdgeRuntime.waitUntil(processGarment(serviceClient, garmentId, user.id));
+  }
   return json({ accepted: true }, 202);
 });
+
+async function processBackImage(
+  supabase: ReturnType<typeof createClient>,
+  garmentId: string,
+  userId: string,
+  backImageUrl: string,
+) {
+  let backCutoutUrl = backImageUrl;
+  try {
+    if (!REMOVEBG_API_KEY) {
+      throw new Error("remove.bg is not configured");
+    }
+    const cutoutBytes = await removeBackground(backImageUrl);
+    const cutoutPath = `${userId}/${garmentId}_back_cutout.png`;
+    const { error: uploadError } = await supabase.storage
+      .from("garment-images")
+      .upload(cutoutPath, cutoutBytes, {
+        contentType: "image/png",
+        upsert: true,
+      });
+    if (uploadError) {
+      throw new Error(`Back cutout upload failed: ${uploadError.message}`);
+    }
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("garment-images").getPublicUrl(cutoutPath);
+    backCutoutUrl = publicUrl;
+  } catch (error) {
+    // A back photo remains useful if remove.bg is unavailable or times out.
+    console.warn("Back background removal unavailable; using original", error);
+  }
+
+  const { error: updateError } = await supabase
+    .from("garments")
+    .update({
+      back_cutout_url: backCutoutUrl,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", garmentId)
+    .eq("user_id", userId)
+    .eq("back_image_url", backImageUrl);
+  if (updateError) {
+    console.error("Could not persist back cutout", garmentId, updateError);
+  }
+}
 
 async function processGarment(
   supabase: ReturnType<typeof createClient>,
@@ -202,24 +267,38 @@ async function processGarment(
     assertSecrets();
 
     const [cutoutBytes, metadata] = await Promise.all([
-      removeBackground(garment.image_url),
+      removeBackground(garment.image_url).catch((error) => {
+        console.warn(
+          "Front background removal unavailable; using original",
+          error,
+        );
+        return null;
+      }),
       analyzeGarment(garment.image_url),
     ]);
 
-    const cutoutPath = `${userId}/${garmentId}_cutout.png`;
-    const { error: cutoutError } = await supabase.storage
-      .from("garment-images")
-      .upload(cutoutPath, cutoutBytes, {
-        contentType: "image/png",
-        upsert: true,
-      });
-    if (cutoutError) {
-      throw new Error(`Cutout upload failed: ${cutoutError.message}`);
+    let cutoutUrl = garment.image_url;
+    if (cutoutBytes) {
+      const cutoutPath = `${userId}/${garmentId}_cutout.png`;
+      const { error: cutoutError } = await supabase.storage
+        .from("garment-images")
+        .upload(cutoutPath, cutoutBytes, {
+          contentType: "image/png",
+          upsert: true,
+        });
+      if (cutoutError) {
+        console.warn(
+          "Front cutout upload unavailable; using original",
+          cutoutError,
+        );
+      } else {
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from("garment-images").getPublicUrl(cutoutPath);
+        cutoutUrl = publicUrl;
+      }
     }
 
-    const {
-      data: { publicUrl: cutoutUrl },
-    } = supabase.storage.from("garment-images").getPublicUrl(cutoutPath);
     const embedding = await generateEmbedding(metadata);
 
     const { error: updateError } = await supabase
@@ -405,7 +484,7 @@ function validateMetadata(value: Record<string, unknown>) {
 }
 
 function assertSecrets() {
-  if (!OPENAI_API_KEY || !REMOVEBG_API_KEY) {
+  if (!OPENAI_API_KEY) {
     throw new Error("Provider secrets are not configured");
   }
 }
