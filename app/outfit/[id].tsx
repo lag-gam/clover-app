@@ -7,7 +7,7 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
   deleteOutfit,
   fetchOutfitWithItems,
@@ -93,14 +93,11 @@ export default function OutfitDetailScreen() {
 
   return (
     <ScrollView className="flex-1 bg-clover-50">
-      <View className="px-4 pt-5">
-        <Text className="text-center text-2xl font-bold text-stone-900">
-          {outfit.name?.trim() || "Outfit"}
-        </Text>
-      </View>
-      <View className="px-4 py-6">
+      <Stack.Screen options={{ title: outfit.name?.trim() || "Outfit" }} />
+      <View className="px-4 pt-4">
         <FlatLayCollage
           items={items}
+          showLabels={false}
           onGarmentPress={() => {}}
           onItemPress={setActionItem}
           accessibilityLabel="Saved outfit flat lay"
@@ -145,6 +142,9 @@ export default function OutfitDetailScreen() {
         >
           <Text className="text-white font-semibold">Mark as Worn</Text>
         </TouchableOpacity>
+        <Text className="mt-2 text-center text-xs text-stone-400">
+          Scheduled looks move to Laundry the day after you wear them.
+        </Text>
         <TouchableOpacity
           accessibilityRole="button"
           accessibilityLabel="Delete outfit"

@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { SagModeToggle } from "@/components/SagModeToggle";
 import { useAuth } from "@/hooks/useAuth";
 import { useSagMode } from "@/hooks/useSagMode";
@@ -25,12 +25,27 @@ import {
 } from "@/services/pinterest.service";
 import { Garment, PinterestStatus } from "@/types/database";
 
+function profileName(user: { email?: string | null; user_metadata?: Record<string, unknown> } | null) {
+  const meta = user?.user_metadata ?? {};
+  const name = meta.full_name ?? meta.name;
+  if (typeof name === "string" && name.trim()) return name.trim();
+  return user?.email?.split("@")[0] ?? "You";
+}
+
+function profileAvatar(user: { user_metadata?: Record<string, unknown> } | null) {
+  const meta = user?.user_metadata ?? {};
+  const url = meta.avatar_url ?? meta.picture;
+  return typeof url === "string" && url.length > 0 ? url : null;
+}
+
 export default function ProfileScreen() {
+  const router = useRouter();
   const { user, signOut } = useAuth();
   const { profile, interactionCount, loading, refresh, isColdStart } =
     useStyleProfile();
   const { sagMode, setSagMode } = useSagMode();
   const [topGarments, setTopGarments] = useState<Garment[]>([]);
+  const [garmentCount, setGarmentCount] = useState(0);
   const [pinterest, setPinterest] = useState<PinterestStatus | null>(null);
   const [selectedBoardIds, setSelectedBoardIds] = useState<string[]>([]);
   const [pinterestLoading, setPinterestLoading] = useState(true);
@@ -61,7 +76,7 @@ export default function ProfileScreen() {
       void loadPinterest();
       if (user) {
         fetchGarments(user.id).then((g) => {
-          // Show first 6 garments as "top" items for now
+          setGarmentCount(g.length);
           setTopGarments(g.slice(0, 6));
         });
       }
@@ -175,38 +190,39 @@ export default function ProfileScreen() {
       }
     >
       <View className="items-center pt-8 pb-4">
-        <View className="w-20 h-20 rounded-full bg-clover-100 items-center justify-center mb-4">
-          <Text className="text-2xl text-clover-600">
-            C
-          </Text>
+        <View className="mb-4 h-20 w-20 overflow-hidden rounded-full bg-clover-100">
+          {profileAvatar(user) ? (
+            <Image
+              source={{ uri: profileAvatar(user)! }}
+              className="h-20 w-20"
+            />
+          ) : (
+            <View className="h-20 w-20 items-center justify-center">
+              <Text className="text-2xl font-bold text-clover-700">
+                {profileName(user).slice(0, 1).toUpperCase()}
+              </Text>
+            </View>
+          )}
         </View>
-        <Text className="text-lg font-semibold">Your closet</Text>
-        <Text className="text-sm text-gray-500 mt-1">{user?.email}</Text>
+        <Text className="text-lg font-semibold text-stone-900">
+          {profileName(user)}
+        </Text>
+        <Text className="mt-1 text-sm text-stone-500">{user?.email}</Text>
       </View>
 
-      {/* Style Stats */}
       <View className="px-4 mb-4">
-        <Text className="text-base font-semibold text-gray-800 mb-3">
-          Style Profile
-        </Text>
         <View className="flex-row gap-3">
+          <View className="flex-1 items-center rounded-xl border border-clover-200 bg-[#FCFBF7] p-3">
+            <Text className="text-2xl font-bold text-clover-600">
+              {garmentCount}
+            </Text>
+            <Text className="text-xs text-stone-500">Garments</Text>
+          </View>
           <View className="flex-1 items-center rounded-xl border border-clover-200 bg-[#FCFBF7] p-3">
             <Text className="text-2xl font-bold text-clover-600">
               {interactionCount}
             </Text>
-            <Text className="text-xs text-gray-500">Ratings</Text>
-          </View>
-          <View className="flex-1 items-center rounded-xl border border-clover-200 bg-[#FCFBF7] p-3">
-            <Text className="text-2xl font-bold text-clover-600">
-              {profile ? "Active" : "---"}
-            </Text>
-            <Text className="text-xs text-gray-500">Style Model</Text>
-          </View>
-          <View className="flex-1 items-center rounded-xl border border-clover-200 bg-[#FCFBF7] p-3">
-            <Text className="text-2xl font-bold text-clover-600">
-              {topGarments.length}
-            </Text>
-            <Text className="text-xs text-gray-500">Garments</Text>
+            <Text className="text-xs text-stone-500">Ratings</Text>
           </View>
         </View>
 
@@ -229,19 +245,19 @@ export default function ProfileScreen() {
       </View>
 
       {/* Pinterest taste */}
-      <View className="mx-4 mb-6 rounded-2xl border border-red-100 bg-red-50 p-4">
+      <View className="mx-4 mb-6 rounded-2xl border border-clover-200 bg-[#FCFBF7] p-4">
         <View className="flex-row items-center justify-between">
           <View className="flex-1">
-            <Text className="text-base font-semibold text-gray-900">
-              Pinterest taste
+            <Text className="text-base font-semibold text-stone-900">
+              Pinterest
             </Text>
-            <Text className="mt-1 text-xs text-gray-500">
-              Blend selected boards with your Clover ratings.
+            <Text className="mt-1 text-xs text-stone-500">
+              Optional. Blend boards with your ratings.
             </Text>
           </View>
           {pinterest?.connected && (
-            <View className="rounded-full bg-white px-3 py-1">
-              <Text className="text-xs font-semibold text-red-600">
+            <View className="rounded-full bg-clover-100 px-3 py-1">
+              <Text className="text-xs font-semibold text-clover-700">
                 {pinterest.pinCount} Pins
               </Text>
             </View>
@@ -249,19 +265,19 @@ export default function ProfileScreen() {
         </View>
 
         {pinterestLoading ? (
-          <ActivityIndicator className="my-5" color="#dc2626" />
+          <ActivityIndicator className="my-5" color="#173F32" />
         ) : !pinterest?.connected ? (
           <TouchableOpacity
-            className={`mt-4 items-center rounded-xl bg-red-600 py-3 ${
+            className={`mt-4 items-center rounded-xl border border-clover-200 bg-white py-3 ${
               pinterestAction ? "opacity-60" : ""
             }`}
             onPress={() => void handleConnect()}
             disabled={Boolean(pinterestAction)}
           >
             {pinterestAction === "connect" ? (
-              <ActivityIndicator color="#ffffff" />
+              <ActivityIndicator color="#173F32" />
             ) : (
-              <Text className="font-semibold text-white">
+              <Text className="font-semibold text-clover-700">
                 Connect Pinterest
               </Text>
             )}
@@ -276,7 +292,7 @@ export default function ProfileScreen() {
                 onPress={() => void handleRefreshBoards()}
                 disabled={Boolean(pinterestAction)}
               >
-                <Text className="text-xs font-semibold text-red-600">
+                <Text className="text-xs font-semibold text-clover-700">
                   Refresh boards
                 </Text>
               </TouchableOpacity>
@@ -303,8 +319,8 @@ export default function ProfileScreen() {
                       <View
                         className={`mr-3 h-5 w-5 items-center justify-center rounded border ${
                           selected
-                            ? "border-red-600 bg-red-600"
-                            : "border-gray-300"
+                            ? "border-clover-600 bg-clover-600"
+                            : "border-stone-300"
                         }`}
                       >
                         {selected && (
@@ -321,7 +337,7 @@ export default function ProfileScreen() {
             )}
 
             <TouchableOpacity
-              className={`mt-2 items-center rounded-xl bg-red-600 py-3 ${
+              className={`mt-2 items-center rounded-xl bg-clover-600 py-3 ${
                 pinterestAction || selectedBoardIds.length === 0
                   ? "opacity-50"
                   : ""
@@ -365,8 +381,11 @@ export default function ProfileScreen() {
           </Text>
           <View className="flex-row flex-wrap gap-2">
             {topGarments.map((g) => (
-              <View
+              <TouchableOpacity
                 key={g.id}
+                onPress={() => router.push(`/garment/${g.id}`)}
+                accessibilityRole="button"
+                accessibilityLabel={g.name}
                 className="h-16 w-16 items-center justify-center rounded-xl border border-clover-200 bg-[#FCFBF7]"
               >
                 <Image
@@ -374,7 +393,7 @@ export default function ProfileScreen() {
                   className="w-14 h-14"
                   resizeMode="contain"
                 />
-              </View>
+              </TouchableOpacity>
             ))}
           </View>
         </View>

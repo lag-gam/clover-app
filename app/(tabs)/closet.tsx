@@ -369,7 +369,7 @@ export default function ClosetScreen() {
             </TouchableOpacity>
           </View>
         )}
-        {view !== "laundry" && (
+        {view === "outfits" && (
           <TouchableOpacity
             accessibilityRole="button"
             onPress={() => router.push("/outfit/create")}

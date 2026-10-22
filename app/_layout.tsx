@@ -69,7 +69,7 @@ function RootLayoutNav() {
       <Stack.Screen name="garment/[id]" options={{ title: "Garment" }} />
       <Stack.Screen
         name="outfit/create"
-        options={{ title: "Create Your Outfit" }}
+        options={{ title: "Create outfit" }}
       />
       <Stack.Screen name="outfit/[id]" options={{ title: "Outfit" }} />
       <Stack.Screen

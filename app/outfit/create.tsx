@@ -140,10 +140,7 @@ const CreateOutfitHeader = memo(function CreateOutfitHeader({
       <View className="bg-stone-50 px-4 pb-5 pt-4">
         <View className="mb-3 flex-row items-center justify-between">
           <View>
-            <Text className="text-2xl font-bold text-stone-900">
-              Create your own outfit
-            </Text>
-            <Text className="mt-1 text-sm text-stone-500">
+            <Text className="text-sm text-stone-500">
               Tap closet pieces to build a flat lay.
             </Text>
           </View>

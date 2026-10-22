@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import { useRouter } from "expo-router";
 import { useAuth } from "@/hooks/useAuth";
 import {
   BatchGarmentProgress,
@@ -23,6 +24,7 @@ type Confirmation = {
 };
 
 export default function AddScreen() {
+  const router = useRouter();
   const { user } = useAuth();
   const [saving, setSaving] = useState(false);
   const [progress, setProgress] = useState<BatchGarmentProgress | null>(null);
@@ -117,6 +119,11 @@ export default function AddScreen() {
       const saved = resultSummary.garments.length;
       const failed = resultSummary.failures.length;
 
+      if (saved > 0 && failed === 0) {
+        router.push("/(tabs)/closet");
+        return;
+      }
+
       if (saved > 0) {
         setConfirmation({
           message: `${saved} garment${saved === 1 ? "" : "s"} saved — analyzing in background.${
@@ -166,7 +173,7 @@ export default function AddScreen() {
           className={`w-full flex-row items-center border rounded-lg p-3 mb-8 ${
             confirmation.hasFailures
               ? "bg-amber-50 border-amber-200"
-              : "bg-clover-50 border-clover-200"
+              : "bg-white border-clover-200"
           }`}
         >
           <Ionicons

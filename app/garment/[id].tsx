@@ -8,7 +8,7 @@ import {
   Alert,
   ActivityIndicator,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { supabase } from "@/lib/supabase";
 import {
@@ -43,6 +43,7 @@ export default function GarmentDetailScreen() {
   const [processingEvents, setProcessingEvents] = useState<
     GarmentProcessingEvent[]
   >([]);
+  const [showAnalysisLog, setShowAnalysisLog] = useState(false);
 
   useEffect(() => {
     void loadGarment();
@@ -275,6 +276,7 @@ export default function GarmentDetailScreen() {
 
   return (
     <ScrollView className="flex-1 bg-clover-50">
+      <Stack.Screen options={{ title: garment.name }} />
       <View className="h-80 items-center justify-center border-b border-clover-200 bg-clover-100">
         <Image
           source={{
@@ -289,47 +291,45 @@ export default function GarmentDetailScreen() {
       </View>
 
       <View className="px-4 pt-4">
-        <View className="mb-4 flex-row gap-2">
-          <TouchableOpacity
-            onPress={() => setDisplaySide("front")}
-            className={`flex-1 items-center rounded-xl py-2.5 ${
-              displaySide === "front" ? "bg-clover-600" : "bg-gray-100"
-            }`}
-          >
-            <Text
-              className={
-                displaySide === "front"
-                  ? "font-semibold text-white"
-                  : "font-semibold text-gray-600"
-              }
+        <Text className="mb-4 text-2xl font-bold text-stone-800">
+          {garment.name}
+        </Text>
+        {garment.back_image_url ? (
+          <View className="mb-4 flex-row gap-2">
+            <TouchableOpacity
+              onPress={() => setDisplaySide("front")}
+              className={`flex-1 items-center rounded-xl py-2.5 ${
+                displaySide === "front" ? "bg-clover-600" : "bg-gray-100"
+              }`}
             >
-              Front
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            disabled={!garment.back_image_url}
-            onPress={() => setDisplaySide("back")}
-            className={`flex-1 items-center rounded-xl py-2.5 ${
-              displaySide === "back"
-                ? "bg-clover-600"
-                : garment.back_image_url
-                  ? "bg-gray-100"
-                  : "bg-gray-50"
-            }`}
-          >
-            <Text
-              className={
-                displaySide === "back"
-                  ? "font-semibold text-white"
-                  : garment.back_image_url
-                    ? "font-semibold text-gray-600"
-                    : "font-semibold text-gray-300"
-              }
+              <Text
+                className={
+                  displaySide === "front"
+                    ? "font-semibold text-white"
+                    : "font-semibold text-gray-600"
+                }
+              >
+                Front
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setDisplaySide("back")}
+              className={`flex-1 items-center rounded-xl py-2.5 ${
+                displaySide === "back" ? "bg-clover-600" : "bg-gray-100"
+              }`}
             >
-              Back
-            </Text>
-          </TouchableOpacity>
-        </View>
+              <Text
+                className={
+                  displaySide === "back"
+                    ? "font-semibold text-white"
+                    : "font-semibold text-gray-600"
+                }
+              >
+                Back
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
         <TouchableOpacity
           disabled={uploadingBack}
           onPress={chooseBackPhoto}
@@ -382,23 +382,32 @@ export default function GarmentDetailScreen() {
               </Text>
             )}
             {processingEvents.length > 0 && (
-              <View className="mt-3 rounded-lg bg-white/80 px-3 py-2">
-                <Text className="mb-1 text-[11px] font-bold uppercase tracking-wider text-stone-500">
-                  Analysis log
-                </Text>
-                {processingEvents.map((event) => (
-                  <Text
-                    key={event.id}
-                    selectable
-                    className={`text-[11px] leading-4 ${
-                      event.status === "failed"
-                        ? "text-red-700"
-                        : "text-stone-600"
-                    }`}
-                  >
-                    {event.stage} · {event.status}: {event.message}
+              <View className="mt-3">
+                <TouchableOpacity
+                  onPress={() => setShowAnalysisLog((current) => !current)}
+                  className="self-start py-1"
+                >
+                  <Text className="text-xs font-semibold text-stone-500">
+                    {showAnalysisLog ? "Hide analysis log" : "Show analysis log"}
                   </Text>
-                ))}
+                </TouchableOpacity>
+                {showAnalysisLog ? (
+                  <View className="mt-2 rounded-lg bg-white/80 px-3 py-2">
+                    {processingEvents.map((event) => (
+                      <Text
+                        key={event.id}
+                        selectable
+                        className={`text-[11px] leading-4 ${
+                          event.status === "failed"
+                            ? "text-red-700"
+                            : "text-stone-600"
+                        }`}
+                      >
+                        {event.stage} · {event.status}: {event.message}
+                      </Text>
+                    ))}
+                  </View>
+                ) : null}
               </View>
             )}
             {processingRetryable && (
@@ -414,8 +423,6 @@ export default function GarmentDetailScreen() {
             )}
           </View>
         )}
-
-        <Text className="text-2xl font-bold text-gray-800">{garment.name}</Text>
 
         {garment.processing_status === "ready" && (
           <>
