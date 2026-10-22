@@ -224,8 +224,8 @@ export default function CalendarScreen() {
   };
 
   return (
-    <ScrollView className="flex-1 bg-stone-50">
-      <View className="bg-white px-4 pb-5 pt-4">
+    <ScrollView className="flex-1 bg-clover-50">
+      <View className="border-b border-clover-200 bg-[#FCFBF7] px-4 pb-5 pt-4">
         <View className="flex-row items-center justify-between">
           <TouchableOpacity
             onPress={() => changeMonth(-1)}
@@ -248,7 +248,7 @@ export default function CalendarScreen() {
                 setSelectedDate(today);
               }}
             >
-              <Text className="mt-1 text-xs font-semibold text-green-700">
+              <Text className="mt-1 text-xs font-semibold text-clover-700">
                 Today
               </Text>
             </TouchableOpacity>
@@ -301,9 +301,9 @@ export default function CalendarScreen() {
                 <View
                   className={`h-9 w-9 items-center justify-center rounded-full ${
                     selected
-                      ? "bg-green-600"
+                      ? "bg-clover-600"
                       : isToday
-                        ? "border border-green-500 bg-green-50"
+                        ? "border border-clover-500 bg-clover-50"
                         : ""
                   }`}
                 >
@@ -312,7 +312,7 @@ export default function CalendarScreen() {
                       selected
                         ? "font-bold text-white"
                         : isToday
-                          ? "font-bold text-green-700"
+                          ? "font-bold text-clover-700"
                           : "text-stone-700"
                     }`}
                   >
@@ -322,7 +322,7 @@ export default function CalendarScreen() {
                 {count > 0 && (
                   <View
                     className={`absolute bottom-0 h-1.5 min-w-1.5 rounded-full ${
-                      selected ? "bg-green-100" : "bg-green-600"
+                      selected ? "bg-clover-100" : "bg-clover-600"
                     }`}
                     style={{ width: Math.min(18, 4 + count * 3) }}
                   />
@@ -335,13 +335,13 @@ export default function CalendarScreen() {
 
       <View className="px-4 py-4">
         {(selectedOutfit || reschedulingId) && (
-          <View className="mb-4 flex-row items-center rounded-xl border border-green-200 bg-green-50 px-3 py-3">
+          <View className="mb-4 flex-row items-center rounded-xl border border-clover-200 bg-clover-100 px-3 py-3">
             <Ionicons
               name={reschedulingId ? "move-outline" : "calendar-outline"}
               size={20}
-              color="#15803d"
+              color="#12372A"
             />
-            <Text className="ml-2 flex-1 text-sm font-medium text-green-800">
+            <Text className="ml-2 flex-1 text-sm font-medium text-clover-800">
               {reschedulingId
                 ? "Choose a new date for this outfit."
                 : `Scheduling “${outfitLabel(selectedOutfit!)}” — tap a date.`}
@@ -353,7 +353,7 @@ export default function CalendarScreen() {
               }}
               accessibilityLabel="Cancel scheduling"
             >
-              <Ionicons name="close-circle" size={22} color="#15803d" />
+              <Ionicons name="close-circle" size={22} color="#12372A" />
             </TouchableOpacity>
           </View>
         )}
@@ -380,7 +380,7 @@ export default function CalendarScreen() {
                   accessibilityState={{ selected: active }}
                   className={`rounded-full border px-4 py-2 ${
                     active
-                      ? "border-green-600 bg-green-600"
+                      ? "border-clover-600 bg-clover-600"
                       : "border-stone-200 bg-white"
                   }`}
                 >
@@ -425,7 +425,7 @@ export default function CalendarScreen() {
             </Text>
           </View>
           {(loading || mutating) && (
-            <ActivityIndicator size="small" color="#16a34a" />
+            <ActivityIndicator size="small" color="#173F32" />
           )}
         </View>
 

@@ -217,8 +217,8 @@ export default function GarmentDetailScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator size="large" color="#16a34a" />
+      <View className="flex-1 items-center justify-center bg-clover-50">
+        <ActivityIndicator size="large" color="#173F32" />
       </View>
     );
   }
@@ -231,7 +231,7 @@ export default function GarmentDetailScreen() {
 
   if (editing && editData) {
     return (
-      <View className="flex-1 bg-white">
+      <View className="flex-1 bg-clover-50">
         <MetadataEditor metadata={editData} onChange={setEditData} />
         <View className="flex-row px-4 pb-8 pt-2 gap-3">
           <TouchableOpacity
@@ -255,8 +255,8 @@ export default function GarmentDetailScreen() {
   }
 
   return (
-    <ScrollView className="flex-1 bg-white">
-      <View className="h-80 bg-gray-100 items-center justify-center">
+    <ScrollView className="flex-1 bg-clover-50">
+      <View className="h-80 items-center justify-center border-b border-clover-200 bg-clover-100">
         <Image
           source={{
             uri:
@@ -317,9 +317,9 @@ export default function GarmentDetailScreen() {
           className="mb-5 flex-row items-center justify-center rounded-xl border border-clover-200 bg-clover-50 py-3"
         >
           {uploadingBack ? (
-            <ActivityIndicator size="small" color="#15803d" />
+            <ActivityIndicator size="small" color="#12372A" />
           ) : (
-            <Ionicons name="camera-outline" size={19} color="#15803d" />
+            <Ionicons name="camera-outline" size={19} color="#12372A" />
           )}
           <Text className="ml-2 font-semibold text-clover-700">
             {uploadingBack
@@ -341,7 +341,7 @@ export default function GarmentDetailScreen() {
               {processingRetryable ? (
                 <Ionicons name="alert-circle" size={20} color="#ef4444" />
               ) : (
-                <ActivityIndicator size="small" color="#16a34a" />
+                <ActivityIndicator size="small" color="#173F32" />
               )}
               <Text
                 className={`flex-1 font-semibold ml-2 ${

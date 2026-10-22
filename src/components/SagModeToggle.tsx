@@ -10,7 +10,7 @@ export function SagModeToggle({
   disabled?: boolean;
 }) {
   return (
-    <View className="flex-row items-center justify-between rounded-xl border border-stone-200 bg-white px-4 py-3">
+    <View className="flex-row items-center justify-between rounded-xl border border-clover-200 bg-[#FCFBF7] px-4 py-3">
       <View className="mr-3 flex-1">
         <Text className="font-semibold text-stone-800">
           Sag mode · {value ? "On" : "Off"}
@@ -27,8 +27,8 @@ export function SagModeToggle({
         value={value}
         disabled={disabled}
         onValueChange={onValueChange}
-        trackColor={{ false: "#d6d3d1", true: "#86efac" }}
-        thumbColor={value ? "#15803d" : "#f5f5f4"}
+        trackColor={{ false: "#d6d3d1", true: "#ADC3B3" }}
+        thumbColor={value ? "#12372A" : "#f5f5f4"}
       />
     </View>
   );

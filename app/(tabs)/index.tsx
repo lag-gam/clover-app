@@ -255,10 +255,10 @@ export default function HomeScreen() {
     <TouchableOpacity
       accessibilityRole="button"
       onPress={() => router.push("/outfit/create")}
-      className="mt-4 flex-row items-center justify-center rounded-xl border border-green-200 bg-green-50 px-5 py-3"
+      className="mt-4 flex-row items-center justify-center rounded-2xl border border-clover-200 bg-clover-100 px-5 py-3"
     >
-      <Ionicons name="add-circle-outline" size={20} color="#15803d" />
-      <Text className="ml-2 font-semibold text-green-700">
+      <Ionicons name="add-circle-outline" size={20} color="#12372A" />
+      <Text className="ml-2 font-semibold text-clover-700">
         Create your own outfit
       </Text>
     </TouchableOpacity>
@@ -267,7 +267,7 @@ export default function HomeScreen() {
   // Not enough garments
   if (garmentCount < 3) {
     return (
-      <View className="flex-1 bg-white items-center justify-center px-8">
+      <View className="flex-1 bg-clover-50 items-center justify-center px-8">
         <Ionicons name="shirt-outline" size={48} color="#d1d5db" />
         <Text className="text-lg text-gray-400 mt-4 text-center">
           Add at least 3 garments (top, bottom, shoes) to generate outfits
@@ -283,8 +283,8 @@ export default function HomeScreen() {
   // Loading state
   if (loading) {
     return (
-      <View className="flex-1 bg-white items-center justify-center">
-        <ActivityIndicator size="large" color="#16a34a" />
+      <View className="flex-1 bg-clover-50 items-center justify-center">
+        <ActivityIndicator size="large" color="#173F32" />
         <Text className="text-gray-500 mt-4">Generating outfits...</Text>
       </View>
     );
@@ -293,8 +293,8 @@ export default function HomeScreen() {
   // No outfits generated yet or all reviewed
   if (outfits.length === 0 || currentIndex >= outfits.length) {
     return (
-      <View className="flex-1 bg-white items-center justify-center px-8">
-        <Ionicons name="sparkles-outline" size={48} color="#16a34a" />
+      <View className="flex-1 bg-clover-50 items-center justify-center px-8">
+        <Ionicons name="sparkles-outline" size={48} color="#173F32" />
         <Text className="text-xl font-semibold text-gray-800 mt-4">
           {outfits.length > 0 ? "All done!" : "Ready to style?"}
         </Text>
@@ -330,7 +330,7 @@ export default function HomeScreen() {
   const current = outfits[currentIndex];
 
   return (
-    <View className="flex-1 bg-gray-50 justify-center">
+    <View className="flex-1 bg-clover-50 justify-center">
       {/* Progress */}
       <View className="px-4 pt-2 pb-1">
         <Text className="text-xs text-gray-400 text-center">
@@ -355,13 +355,13 @@ export default function HomeScreen() {
         disabled={savingOutfit || savedIndexes.has(currentIndex)}
         onPress={() => void saveCurrent()}
         className={`mx-4 mt-3 items-center rounded-xl py-3 ${
-          savedIndexes.has(currentIndex) ? "bg-green-100" : "bg-green-600"
+          savedIndexes.has(currentIndex) ? "bg-clover-100" : "bg-clover-600"
         }`}
       >
         <Text
           className={
             savedIndexes.has(currentIndex)
-              ? "font-bold text-green-800"
+              ? "font-bold text-clover-800"
               : "font-bold text-white"
           }
         >

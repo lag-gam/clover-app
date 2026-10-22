@@ -203,7 +203,7 @@ export default function CreateOutfitScreen() {
           onPress={() => void save()}
           accessibilityRole="button"
           accessibilityState={{ disabled: selected.length < 2 || saving }}
-          className={`mt-3 items-center rounded-xl bg-green-600 py-4 ${
+          className={`mt-3 min-h-11 items-center rounded-xl bg-clover-600 py-4 ${
             selected.length < 2 || saving ? "opacity-40" : ""
           }`}
         >
@@ -237,7 +237,7 @@ export default function CreateOutfitScreen() {
               setSubtype(null);
             }}
             className={`rounded-full px-4 py-2 ${
-              category === null ? "bg-green-600" : "bg-stone-100"
+              category === null ? "bg-clover-600" : "bg-stone-100"
             }`}
           >
             <Text
@@ -256,7 +256,7 @@ export default function CreateOutfitScreen() {
                 setSubtype(null);
               }}
               className={`rounded-full px-4 py-2 ${
-                category === item.value ? "bg-green-600" : "bg-stone-100"
+                category === item.value ? "bg-clover-600" : "bg-stone-100"
               }`}
             >
               <Text
@@ -280,7 +280,7 @@ export default function CreateOutfitScreen() {
               onPress={() => setSubtype(null)}
               className={`rounded-full border px-3 py-1.5 ${
                 subtype === null
-                  ? "border-green-600 bg-green-50"
+                  ? "border-clover-600 bg-clover-50"
                   : "border-stone-200"
               }`}
             >
@@ -292,7 +292,7 @@ export default function CreateOutfitScreen() {
                 onPress={() => setSubtype(item)}
                 className={`rounded-full border px-3 py-1.5 ${
                   subtype === item
-                    ? "border-green-600 bg-green-50"
+                    ? "border-clover-600 bg-clover-50"
                     : "border-stone-200"
                 }`}
               >
@@ -307,8 +307,8 @@ export default function CreateOutfitScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator size="large" color="#16a34a" />
+      <View className="flex-1 items-center justify-center bg-clover-50">
+        <ActivityIndicator size="large" color="#173F32" />
         <Text className="mt-3 text-sm text-stone-500">
           Loading ready garments…
         </Text>
@@ -319,7 +319,7 @@ export default function CreateOutfitScreen() {
   return (
     <>
       <FlatList
-        className="flex-1 bg-white"
+        className="flex-1 bg-clover-50"
         data={filteredGarments}
         numColumns={3}
         keyExtractor={(item) => item.id}
@@ -336,7 +336,7 @@ export default function CreateOutfitScreen() {
             accessibilityLabel={`${isSelected ? "Remove" : "Add"} ${item.name}`}
             className={`m-1 flex-1 overflow-hidden rounded-xl border ${
               isSelected
-                ? "border-green-600 bg-green-50"
+                ? "border-clover-600 bg-clover-50"
                 : "border-stone-200 bg-stone-50"
             }`}
             style={{ maxWidth: "32%" }}
@@ -348,7 +348,7 @@ export default function CreateOutfitScreen() {
                 className="h-full w-full"
               />
               {isSelected && (
-                <View className="absolute right-1.5 top-1.5 h-6 w-6 items-center justify-center rounded-full bg-green-600">
+                <View className="absolute right-1.5 top-1.5 h-6 w-6 items-center justify-center rounded-full bg-clover-600">
                   <Ionicons name="checkmark" size={16} color="#ffffff" />
                 </View>
               )}

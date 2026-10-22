@@ -163,8 +163,8 @@ export default function ClosetScreen() {
 
   if (loading && sections.length === 0) {
     return (
-      <View className="flex-1 items-center justify-center bg-stone-50">
-        <ActivityIndicator size="large" color="#16a34a" />
+      <View className="flex-1 items-center justify-center bg-clover-50">
+        <ActivityIndicator size="large" color="#173F32" />
         <Text className="mt-3 text-sm text-stone-500">
           Opening your closet…
         </Text>
@@ -173,8 +173,8 @@ export default function ClosetScreen() {
   }
 
   return (
-    <View className="flex-1 bg-stone-50">
-      <View className="border-b border-stone-200 bg-white px-4 pb-3 pt-2">
+    <View className="flex-1 bg-clover-50">
+      <View className="border-b border-clover-200 bg-[#FCFBF7] px-4 pb-3 pt-2">
         <View className="flex-row items-center justify-between">
           <View className="flex-row rounded-xl bg-stone-100 p-1">
             <TouchableOpacity
@@ -188,11 +188,11 @@ export default function ClosetScreen() {
               <Ionicons
                 name="file-tray-stacked-outline"
                 size={16}
-                color={view === "spatial" ? "#15803d" : "#78716c"}
+                color={view === "spatial" ? "#12372A" : "#77827B"}
               />
               <Text
                 className={`ml-1.5 text-xs font-semibold ${
-                  view === "spatial" ? "text-green-700" : "text-stone-500"
+                  view === "spatial" ? "text-clover-700" : "text-stone-500"
                 }`}
               >
                 Closet
@@ -209,11 +209,11 @@ export default function ClosetScreen() {
               <Ionicons
                 name="grid-outline"
                 size={16}
-                color={view === "grid" ? "#15803d" : "#78716c"}
+                color={view === "grid" ? "#12372A" : "#77827B"}
               />
               <Text
                 className={`ml-1.5 text-xs font-semibold ${
-                  view === "grid" ? "text-green-700" : "text-stone-500"
+                  view === "grid" ? "text-clover-700" : "text-stone-500"
                 }`}
               >
                 Grid
@@ -226,16 +226,16 @@ export default function ClosetScreen() {
               {editing && (
                 <TouchableOpacity
                   onPress={openCreateSection}
-                  className="mr-2 h-9 w-9 items-center justify-center rounded-xl bg-green-50"
+                  className="mr-2 h-11 w-11 items-center justify-center rounded-xl bg-clover-100"
                   accessibilityLabel="Add closet section"
                 >
-                  <Ionicons name="add" size={21} color="#15803d" />
+                  <Ionicons name="add" size={21} color="#12372A" />
                 </TouchableOpacity>
               )}
               <TouchableOpacity
                 onPress={() => setEditing((current) => !current)}
                 className={`rounded-xl px-3 py-2 ${
-                  editing ? "bg-green-600" : "bg-stone-100"
+                  editing ? "bg-clover-600" : "bg-stone-100"
                 }`}
               >
                 <Text
@@ -252,7 +252,7 @@ export default function ClosetScreen() {
         <TouchableOpacity
           accessibilityRole="button"
           onPress={() => router.push("/outfit/create")}
-          className="mt-3 flex-row items-center justify-center rounded-xl bg-green-600 py-3"
+          className="mt-3 min-h-11 flex-row items-center justify-center rounded-xl bg-clover-600 py-3"
         >
           <Ionicons name="layers-outline" size={18} color="#ffffff" />
           <Text className="ml-2 text-sm font-bold text-white">
@@ -297,14 +297,14 @@ export default function ClosetScreen() {
             </Text>
             <TouchableOpacity
               onPress={openCreateSection}
-              className="mt-5 rounded-xl bg-green-600 px-5 py-3"
+              className="mt-5 min-h-11 rounded-xl bg-clover-600 px-5 py-3"
             >
               <Text className="font-semibold text-white">Create a section</Text>
             </TouchableOpacity>
           </View>
         )
       ) : (
-        <View className="flex-1 bg-white">
+        <View className="flex-1 bg-[#FCFBF7]">
           <CategoryFilter selected={category} onSelect={setCategory} />
           <FlatList
             data={filteredGarments}
@@ -322,7 +322,7 @@ export default function ClosetScreen() {
               <RefreshControl
                 refreshing={loading}
                 onRefresh={() => void refresh()}
-                tintColor="#16a34a"
+                tintColor="#173F32"
               />
             }
             ListEmptyComponent={
@@ -393,7 +393,7 @@ export default function ClosetScreen() {
                         }
                         className={`flex-1 items-center rounded-xl border py-3 ${
                           sectionEditor.kind === kind
-                            ? "border-green-600 bg-green-50"
+                            ? "border-clover-600 bg-clover-50"
                             : "border-stone-200 bg-white"
                         }`}
                       >
@@ -408,14 +408,14 @@ export default function ClosetScreen() {
                           size={20}
                           color={
                             sectionEditor.kind === kind
-                              ? "#15803d"
+                              ? "#12372A"
                               : "#78716c"
                           }
                         />
                         <Text
                           className={`mt-1 text-xs capitalize ${
                             sectionEditor.kind === kind
-                              ? "font-semibold text-green-700"
+                              ? "font-semibold text-clover-700"
                               : "text-stone-500"
                           }`}
                         >
@@ -431,7 +431,7 @@ export default function ClosetScreen() {
             <TouchableOpacity
               disabled={savingSection}
               onPress={() => void saveSection()}
-              className={`mt-6 items-center rounded-xl bg-green-600 py-4 ${
+              className={`mt-6 min-h-11 items-center rounded-xl bg-clover-600 py-4 ${
                 savingSection ? "opacity-60" : ""
               }`}
             >

@@ -217,8 +217,8 @@ export default function SeededStyleScreen() {
 
   if (loading || profileLoading) {
     return (
-      <View className="flex-1 items-center justify-center bg-gray-50">
-        <ActivityIndicator size="large" color="#16a34a" />
+      <View className="flex-1 items-center justify-center bg-clover-50">
+        <ActivityIndicator size="large" color="#173F32" />
         <Text className="mt-3 text-gray-500">Building three looks…</Text>
       </View>
     );
@@ -226,7 +226,7 @@ export default function SeededStyleScreen() {
 
   if (error || !garment) {
     return (
-      <View className="flex-1 items-center justify-center bg-gray-50 px-8">
+      <View className="flex-1 items-center justify-center bg-clover-50 px-8">
         <Ionicons name="alert-circle-outline" size={44} color="#ef4444" />
         <Text className="mt-3 text-center text-gray-600">
           {error ?? "Garment not found."}
@@ -239,7 +239,7 @@ export default function SeededStyleScreen() {
     const failed = garment.processing_status === "failed";
 
     return (
-      <View className="flex-1 items-center justify-center bg-gray-50 px-8">
+      <View className="flex-1 items-center justify-center bg-clover-50 px-8">
         <Image
           source={{ uri: garment.cutout_url ?? garment.image_url }}
           className="h-40 w-40"
@@ -248,7 +248,7 @@ export default function SeededStyleScreen() {
         <Ionicons
           name={failed ? "alert-circle-outline" : "hourglass-outline"}
           size={36}
-          color={failed ? "#ef4444" : "#16a34a"}
+          color={failed ? "#ef4444" : "#173F32"}
         />
         <Text className="mt-3 text-center text-lg font-semibold text-gray-800">
           {failed ? "Analysis needs attention" : "Still analyzing this item"}
@@ -269,7 +269,7 @@ export default function SeededStyleScreen() {
   }
 
   return (
-    <ScrollView className="flex-1 bg-gray-50">
+    <ScrollView className="flex-1 bg-clover-50">
       <View className="px-4 pb-10 pt-5">
         <View className="mb-5 flex-row items-center rounded-2xl bg-clover-50 p-4">
           <Image
@@ -311,7 +311,7 @@ export default function SeededStyleScreen() {
                 className="flex-row items-center rounded-lg px-2 py-2"
                 onPress={() => setGeneration((value) => value + 1)}
               >
-                <Ionicons name="refresh" size={16} color="#15803d" />
+                <Ionicons name="refresh" size={16} color="#12372A" />
                 <Text className="ml-1 text-sm font-semibold text-clover-700">
                   Refresh
                 </Text>
@@ -433,10 +433,10 @@ function LookCard({
         disabled={saving || saved}
         onPress={onSave}
         className={`mt-3 items-center rounded-xl py-3 ${
-          saved ? "bg-green-100" : "bg-green-600"
+          saved ? "bg-clover-100" : "bg-clover-600"
         }`}
       >
-        <Text className={saved ? "font-bold text-green-800" : "font-bold text-white"}>
+        <Text className={saved ? "font-bold text-clover-800" : "font-bold text-white"}>
           {saving ? "Saving…" : saved ? "Look saved" : "Save this look"}
         </Text>
       </TouchableOpacity>

@@ -162,12 +162,12 @@ export default function ProfileScreen() {
 
   return (
     <ScrollView
-      className="flex-1 bg-white"
+      className="flex-1 bg-clover-50"
       refreshControl={
         <RefreshControl
           refreshing={loading}
           onRefresh={refresh}
-          tintColor="#16a34a"
+          tintColor="#173F32"
         />
       }
     >
@@ -187,19 +187,19 @@ export default function ProfileScreen() {
           Style Profile
         </Text>
         <View className="flex-row gap-3">
-          <View className="flex-1 bg-gray-50 rounded-lg p-3 items-center">
+          <View className="flex-1 items-center rounded-xl border border-clover-200 bg-[#FCFBF7] p-3">
             <Text className="text-2xl font-bold text-clover-600">
               {interactionCount}
             </Text>
             <Text className="text-xs text-gray-500">Ratings</Text>
           </View>
-          <View className="flex-1 bg-gray-50 rounded-lg p-3 items-center">
+          <View className="flex-1 items-center rounded-xl border border-clover-200 bg-[#FCFBF7] p-3">
             <Text className="text-2xl font-bold text-clover-600">
               {profile ? "Active" : "---"}
             </Text>
             <Text className="text-xs text-gray-500">Style Model</Text>
           </View>
-          <View className="flex-1 bg-gray-50 rounded-lg p-3 items-center">
+          <View className="flex-1 items-center rounded-xl border border-clover-200 bg-[#FCFBF7] p-3">
             <Text className="text-2xl font-bold text-clover-600">
               {topGarments.length}
             </Text>
@@ -208,7 +208,7 @@ export default function ProfileScreen() {
         </View>
 
         {isColdStart && (
-          <View className="bg-clover-50 rounded-lg p-3 mt-3">
+          <View className="mt-3 rounded-xl border border-clover-200 bg-clover-100 p-3">
             <Text className="text-sm text-clover-700">
               Rate {5 - interactionCount} more outfit
               {5 - interactionCount !== 1 ? "s" : ""} to activate personalized
@@ -364,7 +364,7 @@ export default function ProfileScreen() {
             {topGarments.map((g) => (
               <View
                 key={g.id}
-                className="w-16 h-16 bg-gray-100 rounded-lg items-center justify-center"
+                className="h-16 w-16 items-center justify-center rounded-xl border border-clover-200 bg-[#FCFBF7]"
               >
                 <Image
                   source={{ uri: g.cutout_url ?? g.image_url }}

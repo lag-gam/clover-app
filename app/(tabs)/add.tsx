@@ -160,7 +160,7 @@ export default function AddScreen() {
   };
 
   return (
-    <View className="flex-1 bg-white items-center justify-center px-8">
+    <View className="flex-1 bg-clover-50 items-center justify-center px-8">
       {confirmation && (
         <View
           className={`w-full flex-row items-center border rounded-lg p-3 mb-8 ${
@@ -172,7 +172,7 @@ export default function AddScreen() {
           <Ionicons
             name={confirmation.hasFailures ? "alert-circle" : "checkmark-circle"}
             size={22}
-            color={confirmation.hasFailures ? "#d97706" : "#16a34a"}
+            color={confirmation.hasFailures ? "#d97706" : "#173F32"}
           />
           <Text
             className={`flex-1 font-medium ml-2 ${
@@ -185,11 +185,11 @@ export default function AddScreen() {
       )}
 
       <View className="items-center mb-10">
-        <View className="w-24 h-24 rounded-full bg-clover-50 items-center justify-center mb-4">
+        <View className="mb-4 h-24 w-24 items-center justify-center rounded-3xl border border-clover-200 bg-clover-100">
           {saving ? (
-            <ActivityIndicator size="large" color="#16a34a" />
+            <ActivityIndicator size="large" color="#173F32" />
           ) : (
-            <Ionicons name="shirt-outline" size={40} color="#16a34a" />
+            <Ionicons name="shirt-outline" size={40} color="#173F32" />
           )}
         </View>
         <Text className="text-xl font-semibold text-gray-800">
@@ -215,7 +215,7 @@ export default function AddScreen() {
       </View>
 
       <TouchableOpacity
-        className={`rounded-lg py-3 px-6 w-full items-center mb-3 ${
+        className={`mb-3 min-h-11 w-full items-center rounded-xl px-6 py-3 ${
           saving ? "bg-clover-300" : "bg-clover-600"
         }`}
         onPress={() => pickImage(true)}
@@ -228,7 +228,7 @@ export default function AddScreen() {
       </TouchableOpacity>
 
       <TouchableOpacity
-        className={`border rounded-lg py-3 px-6 w-full items-center ${
+        className={`min-h-11 w-full items-center rounded-xl border px-6 py-3 ${
           saving ? "border-clover-300" : "border-clover-600"
         }`}
         onPress={() => pickImage(false)}

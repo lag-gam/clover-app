@@ -141,7 +141,7 @@ function DraggableGarment({
           />
           {isProcessing && !isStale && (
             <View style={styles.processingOverlay}>
-              <ActivityIndicator size="small" color="#15803d" />
+              <ActivityIndicator size="small" color="#173F32" />
               <Text style={styles.processingText}>Analyzing</Text>
             </View>
           )}
@@ -351,7 +351,7 @@ export function SpatialCloset({
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor="#16a34a"
+              tintColor="#173F32"
             />
           }
         >
@@ -360,7 +360,7 @@ export function SpatialCloset({
             <Text style={styles.dragHint}>
               Long press a garment to move it between sections
             </Text>
-            {mutating && <ActivityIndicator size="small" color="#15803d" />}
+            {mutating && <ActivityIndicator size="small" color="#173F32" />}
           </View>
 
           {sections.map((section, sectionIndex) => {
@@ -432,7 +432,7 @@ export function SpatialCloset({
                         onPress={() => onRenameSection(section)}
                         style={styles.iconButton}
                       >
-                        <Ionicons name="pencil" size={16} color="#15803d" />
+                        <Ionicons name="pencil" size={16} color="#12372A" />
                       </TouchableOpacity>
                     </View>
                   )}
@@ -557,18 +557,18 @@ const styles = StyleSheet.create({
   sectionCard: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#e7e5e4",
-    backgroundColor: "#fafaf9",
-    shadowColor: "#292524",
+    borderColor: "#d1ddd2",
+    backgroundColor: "#fcfbf7",
+    shadowColor: "#0f2d23",
     shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.04,
     shadowRadius: 10,
-    elevation: 2,
+    elevation: 0,
     overflow: "hidden",
     transform: [{ perspective: 900 }, { rotateX: "0.4deg" }],
   },
-  drawerCard: { backgroundColor: "#f5f2ed", borderColor: "#ded8cf" },
-  activeDropSection: { borderColor: "#4ade80", borderWidth: 2 },
+  drawerCard: { backgroundColor: "#f2f4ed", borderColor: "#d1ddd2" },
+  activeDropSection: { borderColor: "#789a82", borderWidth: 2 },
   sectionHeader: {
     minHeight: 54,
     paddingHorizontal: 14,
@@ -713,7 +713,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: "rgba(255,255,255,0.86)",
   },
-  processingText: { marginTop: 3, fontSize: 9, color: "#166534" },
+  processingText: { marginTop: 3, fontSize: 9, color: "#12372A" },
   failedBadge: {
     position: "absolute",
     top: 4,
@@ -745,8 +745,8 @@ const styles = StyleSheet.create({
     bottom: 20,
     width: 4,
     borderRadius: 2,
-    backgroundColor: "#22c55e",
-    shadowColor: "#16a34a",
+    backgroundColor: "#4e765e",
+    shadowColor: "#173f32",
     shadowOpacity: 0.35,
     shadowRadius: 4,
   },
@@ -760,8 +760,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "rgba(255,255,255,0.94)",
     borderWidth: 2,
-    borderColor: "#4ade80",
-    shadowColor: "#14532d",
+    borderColor: "#789a82",
+    shadowColor: "#0f2d23",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.25,
     shadowRadius: 12,

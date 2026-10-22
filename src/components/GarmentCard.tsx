@@ -36,10 +36,10 @@ export function GarmentCard({
   return (
     <TouchableOpacity
       onPress={onPress}
-      className="flex-1 m-1 bg-gray-50 rounded-lg overflow-hidden"
+      className="m-1 flex-1 overflow-hidden rounded-xl border border-clover-200 bg-[#FCFBF7]"
       activeOpacity={0.7}
     >
-      <View className="aspect-square items-center justify-center bg-gray-100 p-2">
+      <View className="aspect-square items-center justify-center bg-clover-100 p-2">
         <Image
           source={{ uri: imageUri }}
           className="w-full h-full"
@@ -47,7 +47,7 @@ export function GarmentCard({
         />
         {isProcessing && !isStale && (
           <View className="absolute inset-0 bg-white/80 items-center justify-center">
-            <ActivityIndicator color="#16a34a" />
+            <ActivityIndicator color="#173F32" />
             <Text className="text-[10px] text-gray-600 mt-2">Analyzing</Text>
           </View>
         )}

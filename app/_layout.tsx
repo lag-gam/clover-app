@@ -9,8 +9,8 @@ function RootLayoutNav() {
 
   if (loading) {
     return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator size="large" color="#16a34a" />
+      <View className="flex-1 items-center justify-center bg-clover-50">
+        <ActivityIndicator size="large" color="#173F32" />
       </View>
     );
   }
@@ -21,26 +21,26 @@ function RootLayoutNav() {
         <View className="mb-6 h-20 w-20 items-center justify-center rounded-3xl bg-clover-600">
           <Text className="text-4xl font-bold text-white">C</Text>
         </View>
-        <Text className="text-center text-4xl font-bold text-gray-900">
+        <Text className="text-center text-4xl font-bold text-stone-900">
           Welcome to Clover
         </Text>
-        <Text className="mb-10 mt-3 text-center text-base text-gray-500">
+        <Text className="mb-10 mt-3 text-center text-base text-stone-500">
           Sign in to save your closet and personalized recommendations.
         </Text>
 
         <TouchableOpacity
-          className={`w-full max-w-sm flex-row items-center justify-center rounded-xl border border-gray-200 bg-white px-5 py-4 ${
+          className={`w-full max-w-sm flex-row items-center justify-center rounded-2xl border border-clover-200 bg-white px-5 py-4 ${
             signingIn ? "opacity-60" : ""
           }`}
           onPress={() => void signInWithGoogle()}
           disabled={signingIn}
         >
           {signingIn ? (
-            <ActivityIndicator size="small" color="#16a34a" />
+            <ActivityIndicator size="small" color="#173F32" />
           ) : (
             <Text className="mr-3 text-xl font-bold text-blue-500">G</Text>
           )}
-          <Text className="font-semibold text-gray-800">
+          <Text className="font-semibold text-stone-800">
             {signingIn ? "Connecting to Google…" : "Continue with Google"}
           </Text>
         </TouchableOpacity>
@@ -57,8 +57,11 @@ function RootLayoutNav() {
   return (
     <Stack
       screenOptions={{
-        headerTintColor: "#15803d",
-        headerTitleStyle: { fontWeight: "600" },
+        contentStyle: { backgroundColor: "#F7F8F3" },
+        headerStyle: { backgroundColor: "#FCFBF7" },
+        headerShadowVisible: false,
+        headerTintColor: "#12372A",
+        headerTitleStyle: { color: "#202823", fontWeight: "700" },
       }}
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
