@@ -54,6 +54,13 @@ supabase secrets set OPENAI_API_KEY=your-openai-key REMOVEBG_API_KEY=your-remove
 supabase functions deploy process-garment
 ```
 
+Failed garments now show the actual analysis step on the garment screen.
+Watch live processor logs with:
+
+```bash
+npx supabase functions logs process-garment --follow
+```
+
 Pinterest taste learning is optional. It requires an approved Pinterest
 developer app and additional server-only secrets/functions. Follow the exact
 [Pinterest API v5 setup and deployment steps](docs/pinterest.md).

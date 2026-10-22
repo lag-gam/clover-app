@@ -121,6 +121,24 @@ const materials = [
 ];
 const fits = ["slim", "regular", "relaxed", "oversized"];
 
+function logProcess(
+  level: "info" | "warn" | "error",
+  garmentId: string,
+  step: string,
+  details?: Record<string, unknown>,
+) {
+  const payload = {
+    fn: "process-garment",
+    garmentId,
+    step,
+    ...details,
+  };
+  const line = JSON.stringify(payload);
+  if (level === "error") console.error(line);
+  else if (level === "warn") console.warn(line);
+  else console.log(line);
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -165,6 +183,13 @@ Deno.serve(async (request) => {
     return json({ error: "mode must be front or back" }, 400);
   }
 
+  logProcess("info", garmentId, "accepted", {
+    mode,
+    userId: user.id,
+    openaiConfigured: Boolean(OPENAI_API_KEY),
+    removeBgConfigured: Boolean(REMOVEBG_API_KEY),
+  });
+
   const serviceClient = createClient(
     SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY,
@@ -178,6 +203,7 @@ Deno.serve(async (request) => {
     .maybeSingle();
 
   if (!garment) {
+    logProcess("warn", garmentId, "not_found", { userId: user.id });
     return json({ error: "Garment not found" }, 404);
   }
 
@@ -210,6 +236,7 @@ async function processBackImage(
     if (!REMOVEBG_API_KEY) {
       throw new Error("remove.bg is not configured");
     }
+    logProcess("info", garmentId, "back.removebg.start");
     const cutoutBytes = await removeBackground(backImageUrl);
     const cutoutPath = `${userId}/${garmentId}_back_cutout.png`;
     const { error: uploadError } = await supabase.storage
@@ -225,9 +252,14 @@ async function processBackImage(
       data: { publicUrl },
     } = supabase.storage.from("garment-images").getPublicUrl(cutoutPath);
     backCutoutUrl = publicUrl;
+    logProcess("info", garmentId, "back.removebg.ok", {
+      bytes: cutoutBytes.byteLength,
+    });
   } catch (error) {
     // A back photo remains useful if remove.bg is unavailable or times out.
-    console.warn("Back background removal unavailable; using original", error);
+    logProcess("warn", garmentId, "back.removebg.skipped", {
+      error: errorMessage(error),
+    });
   }
 
   const { error: updateError } = await supabase
@@ -240,7 +272,9 @@ async function processBackImage(
     .eq("user_id", userId)
     .eq("back_image_url", backImageUrl);
   if (updateError) {
-    console.error("Could not persist back cutout", garmentId, updateError);
+    logProcess("error", garmentId, "back.save.failed", {
+      error: updateError.message,
+    });
   }
 }
 
@@ -249,6 +283,7 @@ async function processGarment(
   garmentId: string,
   userId: string,
 ) {
+  const startedAt = Date.now();
   const { data: claimedRows, error: claimError } = await supabase.rpc(
     "claim_garment_processing",
     { p_garment_id: garmentId, p_user_id: userId },
@@ -256,29 +291,46 @@ async function processGarment(
   const garment = claimedRows?.[0];
 
   if (claimError) {
-    console.error("Could not claim garment", garmentId, claimError);
+    logProcess("error", garmentId, "claim.failed", {
+      error: claimError.message,
+    });
     return;
   }
   if (!garment) {
+    logProcess("warn", garmentId, "claim.skipped", {
+      reason: "already processing, ready, or not owned",
+    });
     return;
   }
+
+  logProcess("info", garmentId, "claim.ok", {
+    attempt: garment.processing_attempts,
+  });
 
   try {
     assertSecrets();
 
-    const [cutoutBytes, metadata] = await Promise.all([
-      removeBackground(garment.image_url).catch((error) => {
-        console.warn(
-          "Front background removal unavailable; using original",
-          error,
-        );
-        return null;
-      }),
-      analyzeGarment(garment.image_url),
-    ]);
+    // Analyze first so a vision/metadata failure does not spend a remove.bg credit.
+    logProcess("info", garmentId, "vision.start");
+    const metadata = await analyzeGarment(garment.image_url);
+    logProcess("info", garmentId, "vision.ok", {
+      category: metadata.category,
+      subtype: metadata.subtype,
+    });
+
+    logProcess("info", garmentId, "embedding.start");
+    const embedding = await generateEmbedding(metadata);
+    logProcess("info", garmentId, "embedding.ok", {
+      dimensions: embedding.length,
+    });
 
     let cutoutUrl = garment.image_url;
-    if (cutoutBytes) {
+    try {
+      if (!REMOVEBG_API_KEY) {
+        throw new Error("remove.bg is not configured");
+      }
+      logProcess("info", garmentId, "removebg.start");
+      const cutoutBytes = await removeBackground(garment.image_url);
       const cutoutPath = `${userId}/${garmentId}_cutout.png`;
       const { error: cutoutError } = await supabase.storage
         .from("garment-images")
@@ -287,19 +339,20 @@ async function processGarment(
           upsert: true,
         });
       if (cutoutError) {
-        console.warn(
-          "Front cutout upload unavailable; using original",
-          cutoutError,
-        );
-      } else {
-        const {
-          data: { publicUrl },
-        } = supabase.storage.from("garment-images").getPublicUrl(cutoutPath);
-        cutoutUrl = publicUrl;
+        throw new Error(`Front cutout upload failed: ${cutoutError.message}`);
       }
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("garment-images").getPublicUrl(cutoutPath);
+      cutoutUrl = publicUrl;
+      logProcess("info", garmentId, "removebg.ok", {
+        bytes: cutoutBytes.byteLength,
+      });
+    } catch (error) {
+      logProcess("warn", garmentId, "removebg.skipped", {
+        error: errorMessage(error),
+      });
     }
-
-    const embedding = await generateEmbedding(metadata);
 
     const processingUpdate = {
       ...metadata,
@@ -324,6 +377,9 @@ async function processGarment(
       updateResult.error &&
       isMissingTaxonomyColumn(updateResult.error.message)
     ) {
+      logProcess("warn", garmentId, "save.legacy_fallback", {
+        error: updateResult.error.message,
+      });
       const {
         subtype: _subtype,
         metal_tone: _metalTone,
@@ -349,13 +405,22 @@ async function processGarment(
     if (updateResult.error) {
       throw new Error(`Garment update failed: ${updateResult.error.message}`);
     }
+
+    logProcess("info", garmentId, "ready", {
+      ms: Date.now() - startedAt,
+    });
   } catch (error) {
-    console.error("Garment processing failed", garmentId, error);
+    const publicError = publicProcessingError(error);
+    logProcess("error", garmentId, "failed", {
+      ms: Date.now() - startedAt,
+      error: errorMessage(error),
+      publicError,
+    });
     const { error: failureUpdateError } = await supabase
       .from("garments")
       .update({
         processing_status: "failed",
-        processing_error: publicProcessingError(error),
+        processing_error: publicError,
         processing_completed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
@@ -365,11 +430,9 @@ async function processGarment(
       .eq("processing_attempts", garment.processing_attempts);
 
     if (failureUpdateError) {
-      console.error(
-        "Could not persist garment processing failure",
-        garmentId,
-        failureUpdateError,
-      );
+      logProcess("error", garmentId, "failed.save_error", {
+        error: failureUpdateError.message,
+      });
     }
   }
 }
@@ -397,7 +460,7 @@ async function removeBackground(imageUrl: string): Promise<ArrayBuffer> {
     },
   );
   if (!response.ok) {
-    throw new Error(`remove.bg returned ${response.status}`);
+    throw new Error(await describeHttpError("remove.bg", response));
   }
   return response.arrayBuffer();
 }
@@ -432,7 +495,7 @@ async function analyzeGarment(imageUrl: string) {
     },
   );
   if (!response.ok) {
-    throw new Error(`OpenAI vision returned ${response.status}`);
+    throw new Error(await describeHttpError("OpenAI vision", response));
   }
 
   const payload = await response.json();
@@ -440,7 +503,13 @@ async function analyzeGarment(imageUrl: string) {
   if (typeof content !== "string") {
     throw new Error("OpenAI vision returned no metadata");
   }
-  return validateMetadata(JSON.parse(content));
+  try {
+    return validateMetadata(JSON.parse(content));
+  } catch (error) {
+    throw new Error(
+      `OpenAI vision returned invalid garment metadata: ${errorMessage(error)}`,
+    );
+  }
 }
 
 async function generateEmbedding(metadata: Record<string, unknown>) {
@@ -474,7 +543,7 @@ async function generateEmbedding(metadata: Record<string, unknown>) {
     },
   );
   if (!response.ok) {
-    throw new Error(`OpenAI embeddings returned ${response.status}`);
+    throw new Error(await describeHttpError("OpenAI embeddings", response));
   }
 
   const payload = await response.json();
@@ -486,24 +555,54 @@ async function generateEmbedding(metadata: Record<string, unknown>) {
 }
 
 function validateMetadata(value: Record<string, unknown>) {
+  if (typeof value?.name !== "string" || !value.name.trim()) {
+    throw new Error("missing name");
+  }
+  if (!categories.includes(value.category)) {
+    throw new Error(`invalid category ${String(value.category)}`);
+  }
   if (
-    typeof value?.name !== "string" ||
-    !categories.includes(value.category) ||
-    !subtypesByCategory[value.category as string]?.includes(value.subtype) ||
-    !metalTones.includes(value.metal_tone) ||
-    !colors.includes(value.color) ||
-    (value.secondary_color !== null &&
-      !colors.includes(value.secondary_color)) ||
-    !patterns.includes(value.pattern) ||
-    !materials.includes(value.material) ||
-    !fits.includes(value.fit) ||
+    !subtypesByCategory[value.category as string]?.includes(value.subtype)
+  ) {
+    throw new Error(
+      `invalid subtype ${String(value.subtype)} for ${String(value.category)}`,
+    );
+  }
+  if (!metalTones.includes(value.metal_tone)) {
+    throw new Error(`invalid metal_tone ${String(value.metal_tone)}`);
+  }
+  if (!colors.includes(value.color)) {
+    throw new Error(`invalid color ${String(value.color)}`);
+  }
+  if (
+    value.secondary_color !== null &&
+    !colors.includes(value.secondary_color)
+  ) {
+    throw new Error(
+      `invalid secondary_color ${String(value.secondary_color)}`,
+    );
+  }
+  if (!patterns.includes(value.pattern)) {
+    throw new Error(`invalid pattern ${String(value.pattern)}`);
+  }
+  if (!materials.includes(value.material)) {
+    throw new Error(`invalid material ${String(value.material)}`);
+  }
+  if (!fits.includes(value.fit)) {
+    throw new Error(`invalid fit ${String(value.fit)}`);
+  }
+  if (
     !Number.isInteger(value.formality) ||
     value.formality < 1 ||
-    value.formality > 5 ||
+    value.formality > 5
+  ) {
+    throw new Error(`invalid formality ${String(value.formality)}`);
+  }
+  if (
     !Array.isArray(value.tags) ||
     !value.tags.every((tag) => typeof tag === "string")
   ) {
-    throw new Error("OpenAI vision returned invalid garment metadata");
+    throw new Error("invalid tags");
   }
 
   return {
@@ -540,14 +639,43 @@ async function fetchWithTimeout(
   }
 }
 
-function publicProcessingError(error: unknown) {
-  if (
-    error instanceof Error &&
-    error.message === "Provider secrets are not configured"
-  ) {
-    return "Garment analysis is not configured. Please try again later.";
+function errorMessage(error: unknown): string {
+  if (error instanceof Error && error.name === "AbortError") {
+    return `Timed out after ${PROVIDER_TIMEOUT_MS / 1000}s`;
   }
-  return "Garment analysis failed. Please retry.";
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+async function describeHttpError(
+  provider: string,
+  response: Response,
+): Promise<string> {
+  const raw = (await response.text()).replace(/\s+/g, " ").trim().slice(0, 280);
+  return `${provider} returned ${response.status}${raw ? `: ${raw}` : ""}`;
+}
+
+function publicProcessingError(error: unknown) {
+  const message = errorMessage(error).slice(0, 280);
+  if (message === "Provider secrets are not configured") {
+    return "Garment analysis is not configured. Set OPENAI_API_KEY as a Supabase Edge secret, then retry.";
+  }
+  if (isMissingTaxonomyColumn(message)) {
+    return "Database is missing garment columns. Run migration 007_flatlay_outfit_taxonomy.sql, then retry.";
+  }
+  if (message.startsWith("OpenAI vision")) {
+    return `Vision analysis failed. ${message}`;
+  }
+  if (message.startsWith("OpenAI embeddings")) {
+    return `Embedding generation failed. ${message}`;
+  }
+  if (message.startsWith("Garment update failed")) {
+    return message;
+  }
+  if (message.includes("Timed out")) {
+    return `Garment analysis timed out. ${message}`;
+  }
+  return `Garment analysis failed. ${message}`;
 }
 
 function json(body: Record<string, unknown>, status: number) {
