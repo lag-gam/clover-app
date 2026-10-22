@@ -81,35 +81,56 @@ function canvasColor(items: FlatLayItem[]) {
 function basePlacement(
   item: FlatLayItem,
   sagMode: boolean,
-  hasOuterwear: boolean
+  hasOuterwear: boolean,
+  sparseLayout: boolean
 ): Placement {
   switch (item.slot) {
     case "dress":
-      return { left: "7%", top: "7%", width: "59%", height: "66%", zIndex: 3 };
+      return {
+        left: sparseLayout ? "2%" : "4%",
+        top: "3%",
+        width: sparseLayout ? "88%" : "72%",
+        height: sparseLayout ? "82%" : "74%",
+        zIndex: 3,
+      };
     case "outerwear":
-      return { left: "2%", top: "3%", width: "57%", height: "40%", zIndex: 5, rotate: "-2deg" };
+      return {
+        left: "0%",
+        top: "1%",
+        width: sparseLayout ? "86%" : "68%",
+        height: sparseLayout ? "48%" : "44%",
+        zIndex: 5,
+        rotate: "-2deg",
+      };
     case "top":
       return {
-        left: hasOuterwear ? "43%" : sagMode ? "7%" : "8%",
-        top: "5%",
-        width: hasOuterwear ? "52%" : "57%",
-        height: "39%",
+        left: hasOuterwear ? "39%" : sparseLayout ? "0%" : "2%",
+        top: sparseLayout ? "1%" : "3%",
+        width: hasOuterwear ? "60%" : sparseLayout ? "88%" : "72%",
+        height: sparseLayout ? "46%" : "43%",
         zIndex: 4,
         rotate: "1deg",
       };
     case "underwear":
-      return { left: "23%", top: "39%", width: "43%", height: "14%", zIndex: 2 };
+      return { left: "15%", top: "38%", width: "55%", height: "16%", zIndex: 2 };
     case "bottom":
       return {
-        left: sagMode ? "17%" : "14%",
-        top: sagMode ? "45%" : "41%",
-        width: "53%",
-        height: sagMode ? "48%" : "52%",
+        left: sparseLayout ? "1%" : sagMode ? "8%" : "4%",
+        top: sagMode ? "43%" : sparseLayout ? "38%" : "39%",
+        width: sparseLayout ? "78%" : "65%",
+        height: sagMode ? "55%" : sparseLayout ? "61%" : "58%",
         zIndex: 3,
         rotate: "-1deg",
       };
     case "shoes":
-      return { left: "53%", top: "73%", width: "43%", height: "23%", zIndex: 6, rotate: "3deg" };
+      return {
+        left: sparseLayout ? "46%" : "50%",
+        top: sparseLayout ? "72%" : "75%",
+        width: sparseLayout ? "52%" : "48%",
+        height: "24%",
+        zIndex: 6,
+        rotate: "3deg",
+      };
     default:
       return ACCESSORY_PLACEMENTS[0];
   }
@@ -132,6 +153,7 @@ export function FlatLayCollage({
         `${b.garment.subtype ?? "other"}:${b.garment.id}`
       )
     );
+  const sparseLayout = items.length <= 3 && accessories.length === 0;
   const occupiedPlacements = new Set<number>();
   const accessoryPlacement = new Map<string, Placement>();
   for (const accessory of accessories) {
@@ -162,7 +184,7 @@ export function FlatLayCollage({
         {items.map((item) => {
           const placement =
             accessoryPlacement.get(item.garment.id) ??
-            basePlacement(item, sagMode, hasOuterwear);
+            basePlacement(item, sagMode, hasOuterwear, sparseLayout);
 
           return (
             <Pressable
