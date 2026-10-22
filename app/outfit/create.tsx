@@ -114,7 +114,10 @@ export default function CreateOutfitScreen() {
     setSaving(true);
     try {
       const outfit = await saveManualOutfit(user.id, selected, name);
-      router.replace(`/outfit/${outfit.id}`);
+      router.replace({
+        pathname: "/outfit/[id]",
+        params: { id: outfit.id, justSaved: "1" },
+      });
     } catch (error) {
       Alert.alert(
         "Could not save outfit",

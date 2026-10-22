@@ -13,9 +13,13 @@ import { logInteraction } from "@/services/interaction.service";
 import { useAuth } from "@/hooks/useAuth";
 import { Garment, Outfit, OutfitItem } from "@/types/database";
 import { FlatLayCollage } from "@/components/FlatLayCollage";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function OutfitDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, justSaved } = useLocalSearchParams<{
+    id: string;
+    justSaved?: string;
+  }>();
   const { user } = useAuth();
   const router = useRouter();
   const [outfit, setOutfit] = useState<Outfit | null>(null);
@@ -83,6 +87,29 @@ export default function OutfitDetailScreen() {
       )}
 
       <View className="px-4 pb-8">
+        {justSaved === "1" && (
+          <View className="mb-4 flex-row items-center rounded-xl bg-green-50 px-3 py-3">
+            <Ionicons name="checkmark-circle" size={20} color="#15803d" />
+            <Text className="ml-2 flex-1 text-sm font-medium text-green-800">
+              Your outfit is saved. Add it to your calendar when you are ready.
+            </Text>
+          </View>
+        )}
+        <TouchableOpacity
+          className="mb-3 flex-row items-center justify-center rounded-lg border border-clover-600 py-3"
+          accessibilityRole="button"
+          onPress={() =>
+            router.push({
+              pathname: "/(tabs)/calendar",
+              params: { outfitId: outfit.id },
+            })
+          }
+        >
+          <Ionicons name="calendar-outline" size={19} color="#15803d" />
+          <Text className="ml-2 font-semibold text-clover-700">
+            Schedule outfit
+          </Text>
+        </TouchableOpacity>
         <TouchableOpacity
           className="bg-clover-600 rounded-lg py-3 items-center"
           onPress={handleWear}

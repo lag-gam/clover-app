@@ -164,6 +164,20 @@ export interface OutfitItem {
   garment?: Garment;
 }
 
+export interface OutfitWithItems extends Outfit {
+  items: (OutfitItem & { garment: Garment })[];
+}
+
+export interface OutfitSchedule {
+  id: string;
+  user_id: string;
+  outfit_id: string;
+  scheduled_date: string;
+  created_at: string;
+  updated_at: string;
+  outfit: OutfitWithItems;
+}
+
 export interface Interaction {
   id: string;
   user_id: string;
