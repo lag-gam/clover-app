@@ -301,23 +301,53 @@ async function processGarment(
 
     const embedding = await generateEmbedding(metadata);
 
-    const { error: updateError } = await supabase
+    const processingUpdate = {
+      ...metadata,
+      cutout_url: cutoutUrl,
+      embedding,
+      processing_status: "ready",
+      processing_error: null,
+      processing_completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    let updateResult = await supabase
       .from("garments")
-      .update({
-        ...metadata,
-        cutout_url: cutoutUrl,
-        embedding,
-        processing_status: "ready",
-        processing_error: null,
-        processing_completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
+      .update(processingUpdate)
       .eq("id", garmentId)
       .eq("user_id", userId)
       .eq("processing_status", "processing")
       .eq("processing_attempts", garment.processing_attempts);
-    if (updateError) {
-      throw new Error(`Garment update failed: ${updateError.message}`);
+
+    // Migration 007 adds these optional taxonomy columns. Fall back cleanly
+    // during a rolling deployment so existing categories can still process.
+    if (
+      updateResult.error &&
+      isMissingTaxonomyColumn(updateResult.error.message)
+    ) {
+      const {
+        subtype: _subtype,
+        metal_tone: _metalTone,
+        ...legacyMetadata
+      } = metadata;
+      updateResult = await supabase
+        .from("garments")
+        .update({
+          ...legacyMetadata,
+          cutout_url: cutoutUrl,
+          embedding,
+          processing_status: "ready",
+          processing_error: null,
+          processing_completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", garmentId)
+        .eq("user_id", userId)
+        .eq("processing_status", "processing")
+        .eq("processing_attempts", garment.processing_attempts);
+    }
+
+    if (updateResult.error) {
+      throw new Error(`Garment update failed: ${updateResult.error.message}`);
     }
   } catch (error) {
     console.error("Garment processing failed", garmentId, error);
@@ -342,6 +372,14 @@ async function processGarment(
       );
     }
   }
+}
+
+function isMissingTaxonomyColumn(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    (normalized.includes("metal_tone") || normalized.includes("subtype")) &&
+    (normalized.includes("schema cache") || normalized.includes("column"))
+  );
 }
 
 async function removeBackground(imageUrl: string): Promise<ArrayBuffer> {

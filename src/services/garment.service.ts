@@ -106,28 +106,43 @@ export async function createPendingGarment(
   } = supabase.storage.from("garment-images").getPublicUrl(fileName);
 
   onStep("saving");
-  const { data, error } = await supabase
+  const pendingGarment = {
+    user_id: userId,
+    name: "Analyzing garment",
+    category: "tops",
+    subtype: null,
+    metal_tone: "none",
+    color: "multicolor",
+    secondary_color: null,
+    pattern: "solid",
+    material: "other",
+    fit: "regular",
+    formality: 3,
+    image_url: imageUrl,
+    cutout_url: null,
+    embedding: null,
+    tags: [],
+    processing_status: "pending",
+  };
+
+  let result = await supabase
     .from("garments")
-    .insert({
-      user_id: userId,
-      name: "Analyzing garment",
-      category: "tops",
-      subtype: null,
-      metal_tone: "none",
-      color: "multicolor",
-      secondary_color: null,
-      pattern: "solid",
-      material: "other",
-      fit: "regular",
-      formality: 3,
-      image_url: imageUrl,
-      cutout_url: null,
-      embedding: null,
-      tags: [],
-      processing_status: "pending",
-    })
+    .insert(pendingGarment)
     .select()
     .single();
+
+  // Keep imports working while migration 007 is still being deployed.
+  if (result.error && isMissingTaxonomyColumn(result.error.message)) {
+    const { subtype: _subtype, metal_tone: _metalTone, ...legacyGarment } =
+      pendingGarment;
+    result = await supabase
+      .from("garments")
+      .insert(legacyGarment)
+      .select()
+      .single();
+  }
+
+  const { data, error } = result;
 
   if (error) {
     await supabase.storage.from("garment-images").remove([fileName]);
@@ -136,6 +151,14 @@ export async function createPendingGarment(
 
   queueGarmentProcessing(data.id);
   return data as Garment;
+}
+
+function isMissingTaxonomyColumn(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    (normalized.includes("metal_tone") || normalized.includes("subtype")) &&
+    (normalized.includes("schema cache") || normalized.includes("column"))
+  );
 }
 
 export async function createPendingGarments(
