@@ -1,11 +1,16 @@
-import { supabase } from "@/lib/supabase";
 import { Garment, Outfit, OutfitItem } from "@/types/database";
 import { averageVectors, cosineSimilarity } from "@/utils/math";
 
-interface OutfitCandidate {
+export interface OutfitCandidate {
   garments: { garment: Garment; slot: string }[];
   embedding: number[];
   score: number;
+  pinterestInformed: boolean;
+  pinterestScore: number;
+}
+
+export interface OutfitGenerationOptions {
+  sagMode?: boolean;
 }
 
 function shuffle<T>(arr: T[]): T[] {
@@ -49,13 +54,37 @@ function isCompatible(garments: Garment[]): boolean {
   return true;
 }
 
+function isPantsGarment(garment: Garment): boolean {
+  if (garment.category !== "bottoms") return false;
+  if (garment.subtype === "skirt") return false;
+  const descriptors = `${garment.name} ${garment.tags.join(" ")}`.toLowerCase();
+  return !descriptors.includes("skirt");
+}
+
 export function generateOutfitCandidates(
   allGarments: Garment[],
   count: number = 10,
-  styleEmbedding?: number[] | null
+  styleEmbedding?: number[] | null,
+  requiredGarment?: Garment,
+  pinterestEmbedding?: number[] | null,
+  options: OutfitGenerationOptions = {}
 ): OutfitCandidate[] {
+  if (requiredGarment && requiredGarment.processing_status !== "ready") {
+    return [];
+  }
+
+  const readyGarments = allGarments.filter(
+    (garment) => garment.processing_status === "ready"
+  );
+  if (
+    requiredGarment &&
+    !readyGarments.some((garment) => garment.id === requiredGarment.id)
+  ) {
+    readyGarments.push(requiredGarment);
+  }
+
   const byCategory: Record<string, Garment[]> = {};
-  for (const g of allGarments) {
+  for (const g of readyGarments) {
     const cat = g.category;
     if (!byCategory[cat]) byCategory[cat] = [];
     byCategory[cat].push(g);
@@ -64,48 +93,146 @@ export function generateOutfitCandidates(
   const candidates: OutfitCandidate[] = [];
   const maxAttempts = count * 20;
   let attempts = 0;
+  const sagMode = options.sagMode ?? false;
+
+  if (requiredGarment?.category === "underwear" && !sagMode) {
+    return [];
+  }
+  if (sagMode && requiredGarment?.category === "dresses") {
+    return [];
+  }
+  if (
+    sagMode &&
+    requiredGarment?.category === "bottoms" &&
+    !isPantsGarment(requiredGarment)
+  ) {
+    return [];
+  }
 
   while (candidates.length < count && attempts < maxAttempts) {
     attempts++;
     const items: { garment: Garment; slot: string }[] = [];
 
-    // Decide: dress or top+bottom
-    const useDress =
-      byCategory["dresses"]?.length && Math.random() < 0.3;
+    // Decide: dress or top+bottom, while preserving the selected garment.
+    const useDress = sagMode || requiredGarment?.category === "underwear"
+      ? false
+      : requiredGarment?.category === "dresses"
+      ? true
+      : requiredGarment?.category === "tops" ||
+          requiredGarment?.category === "bottoms"
+        ? false
+        : Boolean(byCategory["dresses"]?.length && Math.random() < 0.3);
 
     if (useDress) {
-      items.push({ garment: pickRandom(byCategory["dresses"]), slot: "dress" });
+      const dress =
+        requiredGarment?.category === "dresses"
+          ? requiredGarment
+          : pickRandom(byCategory["dresses"]);
+      items.push({ garment: dress, slot: "dress" });
     } else {
-      if (!byCategory["tops"]?.length || !byCategory["bottoms"]?.length)
+      const bottoms = sagMode
+        ? (byCategory["bottoms"] ?? []).filter(isPantsGarment)
+        : byCategory["bottoms"];
+      if (!byCategory["tops"]?.length || !bottoms?.length)
         continue;
-      items.push({ garment: pickRandom(byCategory["tops"]), slot: "top" });
       items.push({
-        garment: pickRandom(byCategory["bottoms"]),
+        garment:
+          requiredGarment?.category === "tops"
+            ? requiredGarment
+            : pickRandom(byCategory["tops"]),
+        slot: "top",
+      });
+      items.push({
+        garment:
+          requiredGarment?.category === "bottoms"
+            ? requiredGarment
+            : pickRandom(bottoms),
         slot: "bottom",
+      });
+    }
+
+    // Sag mode is pants-only and always exposes one compatible underwear item.
+    if (!useDress && sagMode) {
+      if (!byCategory["underwear"]?.length) continue;
+      items.push({
+        garment:
+          requiredGarment?.category === "underwear"
+            ? requiredGarment
+            : pickRandom(byCategory["underwear"]),
+        slot: "underwear",
       });
     }
 
     // Shoes (required)
     if (!byCategory["shoes"]?.length) continue;
-    items.push({ garment: pickRandom(byCategory["shoes"]), slot: "shoes" });
+    items.push({
+      garment:
+        requiredGarment?.category === "shoes"
+          ? requiredGarment
+          : pickRandom(byCategory["shoes"]),
+      slot: "shoes",
+    });
 
     // Optional outerwear (30% chance)
-    if (byCategory["outerwear"]?.length && Math.random() < 0.3) {
+    if (
+      byCategory["outerwear"]?.length &&
+      (requiredGarment?.category === "outerwear" || Math.random() < 0.3)
+    ) {
       items.push({
-        garment: pickRandom(byCategory["outerwear"]),
+        garment:
+          requiredGarment?.category === "outerwear"
+            ? requiredGarment
+            : pickRandom(byCategory["outerwear"]),
         slot: "outerwear",
       });
     }
 
-    // Optional accessory (30% chance)
-    if (byCategory["accessories"]?.length && Math.random() < 0.3) {
-      items.push({
-        garment: pickRandom(byCategory["accessories"]),
-        slot: "accessory",
-      });
+    // Editorial flat lays may include several accessories, but never repeat a
+    // subtype (for example, two watches).
+    const accessoryPool = byCategory["accessories"] ?? [];
+    if (
+      accessoryPool.length &&
+      (requiredGarment?.category === "accessories" || Math.random() < 0.65)
+    ) {
+      const selectedAccessories: Garment[] = [];
+      const usedSubtypes = new Set<string>();
+      if (requiredGarment?.category === "accessories") {
+        selectedAccessories.push(requiredGarment);
+        usedSubtypes.add(requiredGarment.subtype ?? "other");
+      }
+
+      const targetCount = Math.min(
+        accessoryPool.length,
+        1 + Math.floor(Math.random() * 3)
+      );
+      for (const accessory of shuffle(accessoryPool)) {
+        const subtype = accessory.subtype ?? "other";
+        if (
+          selectedAccessories.some((item) => item.id === accessory.id) ||
+          usedSubtypes.has(subtype)
+        ) {
+          continue;
+        }
+        selectedAccessories.push(accessory);
+        usedSubtypes.add(subtype);
+        if (selectedAccessories.length >= targetCount) break;
+      }
+
+      for (const accessory of selectedAccessories) {
+        items.push({
+          garment: accessory,
+          slot: `accessory:${accessory.subtype ?? "other"}`,
+        });
+      }
     }
 
     const garments = items.map((i) => i.garment);
+    if (
+      requiredGarment &&
+      !garments.some((garment) => garment.id === requiredGarment.id)
+    ) {
+      continue;
+    }
     if (!isCompatible(garments)) continue;
 
     // Check for duplicate outfit
@@ -128,12 +255,28 @@ export function generateOutfitCandidates(
       embeddings.length > 0 ? averageVectors(embeddings) : [];
 
     // Score by style similarity if we have a style profile
-    let score = 0;
+    let styleScore = 0;
     if (styleEmbedding && embedding.length > 0) {
-      score = cosineSimilarity(embedding, styleEmbedding);
+      styleScore = cosineSimilarity(embedding, styleEmbedding);
     }
+    const pinterestScore =
+      pinterestEmbedding && embedding.length > 0
+        ? cosineSimilarity(embedding, pinterestEmbedding)
+        : 0;
+    const score =
+      styleEmbedding && pinterestEmbedding
+        ? styleScore * 0.65 + pinterestScore * 0.35
+        : styleEmbedding
+          ? styleScore
+          : pinterestScore;
 
-    candidates.push({ garments: items, embedding, score });
+    candidates.push({
+      garments: items,
+      embedding,
+      score,
+      pinterestInformed: Boolean(pinterestEmbedding),
+      pinterestScore,
+    });
   }
 
   // Sort by score (highest first)
@@ -146,6 +289,7 @@ export async function saveOutfit(
   userId: string,
   candidate: OutfitCandidate
 ): Promise<Outfit> {
+  const { supabase } = await import("@/lib/supabase");
   const { data: outfit, error: outfitError } = await supabase
     .from("outfits")
     .insert({
@@ -177,6 +321,7 @@ export async function saveOutfit(
 export async function fetchOutfitWithItems(
   outfitId: string
 ): Promise<{ outfit: Outfit; items: (OutfitItem & { garment: Garment })[] }> {
+  const { supabase } = await import("@/lib/supabase");
   const { data: outfit, error: outfitError } = await supabase
     .from("outfits")
     .select("*")
@@ -210,6 +355,16 @@ export function getAlternatives(
     const otherGarments = outfitGarments.filter(
       (og) => og.id !== currentGarment.id
     );
+    if (
+      g.category === "accessories" &&
+      otherGarments.some(
+        (other) =>
+          other.category === "accessories" &&
+          (other.subtype ?? "other") === (g.subtype ?? "other")
+      )
+    ) {
+      return false;
+    }
     return isCompatible([...otherGarments, g]);
   });
 }

@@ -40,7 +40,14 @@ export async function getInteractionCount(userId: string): Promise<number> {
     .from("interactions")
     .select("*", { count: "exact", head: true })
     .eq("user_id", userId)
-    .in("interaction_type", ["liked", "disliked", "selected", "worn", "skipped"]);
+    .in("interaction_type", [
+      "liked",
+      "disliked",
+      "selected",
+      "worn",
+      "repeated",
+      "skipped",
+    ]);
 
   if (error) return 0;
   return count ?? 0;

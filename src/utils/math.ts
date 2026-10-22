@@ -46,7 +46,7 @@ export function weightedAverageVectors(
 
   for (let j = 0; j < vectors.length; j++) {
     const w = weights[j];
-    totalWeight += w;
+    totalWeight += Math.abs(w);
     for (let i = 0; i < dim; i++) {
       result[i] += vectors[j][i] * w;
     }

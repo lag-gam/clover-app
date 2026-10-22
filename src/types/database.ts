@@ -4,7 +4,47 @@ export type GarmentCategory =
   | "dresses"
   | "outerwear"
   | "shoes"
+  | "underwear"
   | "accessories";
+
+export type GarmentSubtype =
+  | "t_shirt"
+  | "shirt"
+  | "blouse"
+  | "tank_top"
+  | "sweater"
+  | "hoodie"
+  | "jeans"
+  | "trousers"
+  | "shorts"
+  | "skirt"
+  | "dress"
+  | "jumpsuit"
+  | "jacket"
+  | "coat"
+  | "blazer"
+  | "vest"
+  | "sneakers"
+  | "boots"
+  | "loafers"
+  | "sandals"
+  | "heels"
+  | "boxers"
+  | "briefs"
+  | "boxer_briefs"
+  | "necklace"
+  | "watch"
+  | "hat"
+  | "beanie"
+  | "belt"
+  | "bag"
+  | "glasses"
+  | "bracelet"
+  | "ring"
+  | "earbuds"
+  | "other";
+
+export type MetalTone = "none" | "silver" | "gold" | "rose_gold" | "mixed";
 
 export type GarmentColor =
   | "black"
@@ -51,6 +91,14 @@ export type GarmentFit = "slim" | "regular" | "relaxed" | "oversized";
 
 export type Formality = 1 | 2 | 3 | 4 | 5; // 1=very casual, 5=very formal
 
+export type GarmentProcessingStatus =
+  | "pending"
+  | "processing"
+  | "ready"
+  | "failed";
+
+export type ClosetSectionKind = "rail" | "shelf" | "drawer";
+
 export type InteractionType =
   | "shown"
   | "skipped"
@@ -66,6 +114,8 @@ export interface Garment {
   user_id: string;
   name: string;
   category: GarmentCategory;
+  subtype: GarmentSubtype | null;
+  metal_tone: MetalTone;
   color: GarmentColor;
   secondary_color: GarmentColor | null;
   pattern: GarmentPattern;
@@ -76,6 +126,23 @@ export interface Garment {
   cutout_url: string | null;
   embedding: number[] | null;
   tags: string[];
+  processing_status: GarmentProcessingStatus;
+  processing_attempts: number;
+  processing_error: string | null;
+  processing_started_at: string | null;
+  processing_completed_at: string | null;
+  section_id: string;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ClosetSection {
+  id: string;
+  user_id: string;
+  name: string;
+  kind: ClosetSectionKind;
+  position: number;
   created_at: string;
   updated_at: string;
 }
@@ -111,6 +178,27 @@ export interface StyleProfile {
   id: string;
   user_id: string;
   style_embedding: number[] | null;
+  interaction_embedding: number[] | null;
+  pinterest_embedding: number[] | null;
   interaction_count: number;
+  pinterest_pin_count: number;
+  pinterest_updated_at: string | null;
   updated_at: string;
+}
+
+export interface PinterestBoard {
+  pinterest_board_id: string;
+  name: string;
+  description: string | null;
+  image_url: string | null;
+  selected: boolean;
+  last_synced_at: string | null;
+}
+
+export interface PinterestStatus {
+  connected: boolean;
+  connectedAt: string | null;
+  expiresAt: string | null;
+  boards: PinterestBoard[];
+  pinCount: number;
 }

@@ -5,8 +5,10 @@ import {
   COLORS,
   PATTERNS,
   MATERIALS,
+  METAL_TONES,
   FITS,
   FORMALITY_LABELS,
+  SUBTYPES_BY_CATEGORY,
 } from "@/constants/categories";
 
 interface MetadataEditorProps {
@@ -60,8 +62,23 @@ function ChipSelect<T extends string>({
 }
 
 export function MetadataEditor({ metadata, onChange }: MetadataEditorProps) {
-  const update = (field: keyof GarmentMetadataInput, value: unknown) => {
+  const update = <K extends keyof GarmentMetadataInput>(
+    field: K,
+    value: GarmentMetadataInput[K]
+  ) => {
     onChange({ ...metadata, [field]: value });
+  };
+
+  const updateCategory = (category: GarmentMetadataInput["category"]) => {
+    const subtype = metadata.subtype;
+    onChange({
+      ...metadata,
+      category,
+      subtype:
+        subtype && SUBTYPES_BY_CATEGORY[category].includes(subtype)
+          ? subtype
+          : null,
+    });
   };
 
   return (
@@ -80,36 +97,54 @@ export function MetadataEditor({ metadata, onChange }: MetadataEditorProps) {
       <ChipSelect
         label="Category"
         options={CATEGORIES.map((c) => c.value)}
-        value={metadata.category as never}
-        onChange={(v) => update("category", v)}
+        value={metadata.category}
+        onChange={updateCategory}
         renderLabel={(v) => CATEGORIES.find((c) => c.value === v)?.label ?? v}
+      />
+
+      <ChipSelect
+        label="Subtype"
+        options={["unspecified", ...SUBTYPES_BY_CATEGORY[metadata.category]]}
+        value={metadata.subtype ?? "unspecified"}
+        onChange={(value) =>
+          update("subtype", value === "unspecified" ? null : value)
+        }
+        renderLabel={(value) => value.replaceAll("_", " ")}
+      />
+
+      <ChipSelect
+        label="Metal Tone"
+        options={METAL_TONES}
+        value={metadata.metal_tone}
+        onChange={(value) => update("metal_tone", value)}
+        renderLabel={(value) => value.replaceAll("_", " ")}
       />
 
       <ChipSelect
         label="Primary Color"
         options={COLORS}
-        value={metadata.color as never}
+        value={metadata.color}
         onChange={(v) => update("color", v)}
       />
 
       <ChipSelect
         label="Pattern"
         options={PATTERNS}
-        value={metadata.pattern as never}
+        value={metadata.pattern}
         onChange={(v) => update("pattern", v)}
       />
 
       <ChipSelect
         label="Material"
         options={MATERIALS}
-        value={metadata.material as never}
+        value={metadata.material}
         onChange={(v) => update("material", v)}
       />
 
       <ChipSelect
         label="Fit"
         options={FITS}
-        value={metadata.fit as never}
+        value={metadata.fit}
         onChange={(v) => update("fit", v)}
       />
 
@@ -117,7 +152,12 @@ export function MetadataEditor({ metadata, onChange }: MetadataEditorProps) {
         label="Formality"
         options={[1, 2, 3, 4, 5].map(String) as never[]}
         value={String(metadata.formality) as never}
-        onChange={(v) => update("formality", parseInt(v, 10))}
+        onChange={(v) =>
+          update(
+            "formality",
+            parseInt(v, 10) as GarmentMetadataInput["formality"]
+          )
+        }
         renderLabel={(v) => FORMALITY_LABELS[parseInt(v, 10)] ?? v}
       />
 

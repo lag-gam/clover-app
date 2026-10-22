@@ -1,4 +1,12 @@
-import { GarmentCategory, GarmentColor, GarmentPattern, GarmentMaterial, GarmentFit } from "@/types/database";
+import {
+  GarmentCategory,
+  GarmentColor,
+  GarmentFit,
+  GarmentMaterial,
+  GarmentPattern,
+  GarmentSubtype,
+  MetalTone,
+} from "@/types/database";
 
 export const CATEGORIES: { label: string; value: GarmentCategory }[] = [
   { label: "Tops", value: "tops" },
@@ -6,7 +14,41 @@ export const CATEGORIES: { label: string; value: GarmentCategory }[] = [
   { label: "Dresses", value: "dresses" },
   { label: "Outerwear", value: "outerwear" },
   { label: "Shoes", value: "shoes" },
+  { label: "Underwear", value: "underwear" },
   { label: "Accessories", value: "accessories" },
+];
+
+export const SUBTYPES_BY_CATEGORY: Record<
+  GarmentCategory,
+  GarmentSubtype[]
+> = {
+  tops: ["t_shirt", "shirt", "blouse", "tank_top", "sweater", "hoodie", "other"],
+  bottoms: ["jeans", "trousers", "shorts", "skirt", "other"],
+  dresses: ["dress", "jumpsuit", "other"],
+  outerwear: ["jacket", "coat", "blazer", "vest", "other"],
+  shoes: ["sneakers", "boots", "loafers", "sandals", "heels", "other"],
+  underwear: ["boxers", "briefs", "boxer_briefs", "other"],
+  accessories: [
+    "necklace",
+    "watch",
+    "hat",
+    "beanie",
+    "belt",
+    "bag",
+    "glasses",
+    "bracelet",
+    "ring",
+    "earbuds",
+    "other",
+  ],
+};
+
+export const METAL_TONES: MetalTone[] = [
+  "none",
+  "silver",
+  "gold",
+  "rose_gold",
+  "mixed",
 ];
 
 export const COLORS: GarmentColor[] = [
@@ -36,7 +78,7 @@ export const FORMALITY_LABELS: Record<number, string> = {
 
 export const OUTFIT_SLOTS = {
   REQUIRED: ["top", "bottom", "shoes"] as const,
-  OPTIONAL: ["outerwear", "accessory"] as const,
+  OPTIONAL: ["outerwear", "underwear", "accessory"] as const,
   DRESS_REPLACES: ["top", "bottom"] as const,
 };
 
@@ -46,5 +88,6 @@ export const CATEGORY_TO_SLOT: Record<GarmentCategory, string> = {
   dresses: "dress",
   outerwear: "outerwear",
   shoes: "shoes",
+  underwear: "underwear",
   accessories: "accessory",
 };

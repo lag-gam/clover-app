@@ -13,11 +13,14 @@ import { supabase } from "@/lib/supabase";
 import {
   updateGarment,
   deleteGarment,
+  retryGarmentProcessing,
   GarmentMetadataInput,
+  isGarmentProcessingStale,
 } from "@/services/garment.service";
 import { MetadataEditor } from "@/components/MetadataEditor";
 import { Garment } from "@/types/database";
 import { FORMALITY_LABELS } from "@/constants/categories";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function GarmentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -27,9 +30,32 @@ export default function GarmentDetailScreen() {
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState<GarmentMetadataInput | null>(null);
   const [saving, setSaving] = useState(false);
+  const [retrying, setRetrying] = useState(false);
 
   useEffect(() => {
-    loadGarment();
+    void loadGarment();
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+
+    const channel = supabase
+      .channel(`garment:${id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "garments",
+          filter: `id=eq.${id}`,
+        },
+        (payload) => setGarment(payload.new as Garment)
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
   }, [id]);
 
   const loadGarment = async () => {
@@ -49,10 +75,12 @@ export default function GarmentDetailScreen() {
   };
 
   const handleEdit = () => {
-    if (!garment) return;
+    if (!garment || garment.processing_status !== "ready") return;
     setEditData({
       name: garment.name,
       category: garment.category,
+      subtype: garment.subtype,
+      metal_tone: garment.metal_tone,
       color: garment.color,
       secondary_color: garment.secondary_color,
       pattern: garment.pattern,
@@ -62,6 +90,26 @@ export default function GarmentDetailScreen() {
       tags: garment.tags,
     });
     setEditing(true);
+  };
+
+  const handleRetry = async () => {
+    if (!garment) return;
+    setRetrying(true);
+    try {
+      await retryGarmentProcessing(garment.id);
+      setGarment({
+        ...garment,
+        processing_status: "pending",
+        processing_error: null,
+      });
+    } catch (error) {
+      Alert.alert(
+        "Retry failed",
+        error instanceof Error ? error.message : "Could not retry analysis"
+      );
+    } finally {
+      setRetrying(false);
+    }
   };
 
   const handleSave = async () => {
@@ -106,6 +154,10 @@ export default function GarmentDetailScreen() {
 
   if (!garment) return null;
 
+  const processingStalled = isGarmentProcessingStale(garment);
+  const processingRetryable =
+    garment.processing_status === "failed" || processingStalled;
+
   if (editing && editData) {
     return (
       <View className="flex-1 bg-white">
@@ -142,33 +194,135 @@ export default function GarmentDetailScreen() {
       </View>
 
       <View className="px-4 pt-4">
+        {garment.processing_status !== "ready" && (
+          <View
+            className={`rounded-lg p-4 mb-4 ${
+              processingRetryable
+                ? "bg-red-50"
+                : "bg-clover-50"
+            }`}
+          >
+            <View className="flex-row items-center">
+              {processingRetryable ? (
+                <Ionicons name="alert-circle" size={20} color="#ef4444" />
+              ) : (
+                <ActivityIndicator size="small" color="#16a34a" />
+              )}
+              <Text
+                className={`flex-1 font-semibold ml-2 ${
+                  processingRetryable
+                    ? "text-red-700"
+                    : "text-clover-700"
+                }`}
+              >
+                {garment.processing_status === "failed"
+                  ? "Analysis failed"
+                  : processingStalled
+                    ? "Analysis stalled"
+                  : "Analyzing in background"}
+              </Text>
+            </View>
+            {garment.processing_error && (
+              <Text className="text-sm text-red-600 mt-2">
+                {garment.processing_error}
+              </Text>
+            )}
+            {processingRetryable && (
+              <TouchableOpacity
+                className="bg-red-600 rounded-lg py-2 items-center mt-3"
+                onPress={() => void handleRetry()}
+                disabled={retrying}
+              >
+                <Text className="text-white font-semibold">
+                  {retrying ? "Retrying…" : "Retry analysis"}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
         <Text className="text-2xl font-bold text-gray-800">{garment.name}</Text>
 
-        <View className="flex-row flex-wrap mt-3 gap-2">
-          <Badge label={garment.category} />
-          <Badge label={garment.color} />
-          <Badge label={garment.pattern} />
-          <Badge label={garment.material} />
-          <Badge label={garment.fit} />
-          <Badge label={FORMALITY_LABELS[garment.formality]} />
-        </View>
+        {garment.processing_status === "ready" && (
+          <>
+            <View className="flex-row flex-wrap mt-3 gap-2">
+              <Badge label={garment.category} />
+              {garment.subtype && (
+                <Badge label={garment.subtype.replaceAll("_", " ")} />
+              )}
+              {garment.metal_tone !== "none" && (
+                <Badge
+                  label={`${garment.metal_tone.replaceAll("_", " ")} tone`}
+                />
+              )}
+              <Badge label={garment.color} />
+              <Badge label={garment.pattern} />
+              <Badge label={garment.material} />
+              <Badge label={garment.fit} />
+              <Badge label={FORMALITY_LABELS[garment.formality]} />
+            </View>
 
-        {garment.tags.length > 0 && (
-          <View className="flex-row flex-wrap mt-3 gap-1">
-            {garment.tags.map((tag) => (
-              <View key={tag} className="bg-clover-50 px-2 py-1 rounded">
-                <Text className="text-xs text-clover-700">{tag}</Text>
+            {garment.tags.length > 0 && (
+              <View className="flex-row flex-wrap mt-3 gap-1">
+                {garment.tags.map((tag) => (
+                  <View key={tag} className="bg-clover-50 px-2 py-1 rounded">
+                    <Text className="text-xs text-clover-700">{tag}</Text>
+                  </View>
+                ))}
               </View>
-            ))}
-          </View>
+            )}
+          </>
+        )}
+
+        <TouchableOpacity
+          className={`mt-6 flex-row items-center justify-center rounded-xl py-4 ${
+            garment.processing_status === "ready"
+              ? "bg-clover-600"
+              : "bg-gray-200"
+          }`}
+          onPress={() => router.push(`/style/${garment.id}`)}
+          disabled={garment.processing_status !== "ready"}
+        >
+          <Ionicons
+            name="sparkles"
+            size={18}
+            color={garment.processing_status === "ready" ? "#ffffff" : "#9ca3af"}
+          />
+          <Text
+            className={`ml-2 font-semibold ${
+              garment.processing_status === "ready"
+                ? "text-white"
+                : "text-gray-400"
+            }`}
+          >
+            Style this item
+          </Text>
+        </TouchableOpacity>
+        {garment.processing_status !== "ready" && (
+          <Text className="mt-2 text-center text-xs text-gray-400">
+            Styling is available after analysis finishes.
+          </Text>
         )}
 
         <View className="flex-row mt-6 gap-3">
           <TouchableOpacity
-            className="flex-1 border border-clover-600 rounded-lg py-3 items-center"
+            className={`flex-1 border rounded-lg py-3 items-center ${
+              garment.processing_status === "ready"
+                ? "border-clover-600"
+                : "border-gray-300"
+            }`}
             onPress={handleEdit}
+            disabled={garment.processing_status !== "ready"}
           >
-            <Text className="text-clover-600 font-semibold">Edit</Text>
+            <Text
+              className={`font-semibold ${
+                garment.processing_status === "ready"
+                  ? "text-clover-600"
+                  : "text-gray-400"
+              }`}
+            >
+              Edit
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity
             className="flex-1 border border-red-300 rounded-lg py-3 items-center"

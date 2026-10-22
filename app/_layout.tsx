@@ -1,26 +1,11 @@
 import "../global.css";
-import { useEffect } from "react";
-import { Slot, useRouter, useSegments } from "expo-router";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
+import { Stack } from "expo-router";
 import { AuthProvider } from "@/providers/AuthProvider";
 import { useAuth } from "@/hooks/useAuth";
 
 function RootLayoutNav() {
-  const { session, loading } = useAuth();
-  const segments = useSegments();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (loading) return;
-
-    const inAuthGroup = segments[0] === "(auth)";
-
-    if (!session && !inAuthGroup) {
-      router.replace("/(auth)/login");
-    } else if (session && inAuthGroup) {
-      router.replace("/(tabs)");
-    }
-  }, [session, loading, segments]);
+  const { session, loading, signingIn, error, signInWithGoogle } = useAuth();
 
   if (loading) {
     return (
@@ -30,7 +15,61 @@ function RootLayoutNav() {
     );
   }
 
-  return <Slot />;
+  if (!session) {
+    return (
+      <View className="flex-1 items-center justify-center bg-clover-50 px-8">
+        <View className="mb-6 h-20 w-20 items-center justify-center rounded-3xl bg-clover-600">
+          <Text className="text-4xl font-bold text-white">C</Text>
+        </View>
+        <Text className="text-center text-4xl font-bold text-gray-900">
+          Welcome to Clover
+        </Text>
+        <Text className="mb-10 mt-3 text-center text-base text-gray-500">
+          Sign in to save your closet and personalized recommendations.
+        </Text>
+
+        <TouchableOpacity
+          className={`w-full max-w-sm flex-row items-center justify-center rounded-xl border border-gray-200 bg-white px-5 py-4 ${
+            signingIn ? "opacity-60" : ""
+          }`}
+          onPress={() => void signInWithGoogle()}
+          disabled={signingIn}
+        >
+          {signingIn ? (
+            <ActivityIndicator size="small" color="#16a34a" />
+          ) : (
+            <Text className="mr-3 text-xl font-bold text-blue-500">G</Text>
+          )}
+          <Text className="font-semibold text-gray-800">
+            {signingIn ? "Connecting to Google…" : "Continue with Google"}
+          </Text>
+        </TouchableOpacity>
+
+        {error && (
+          <Text className="mt-5 max-w-sm text-center text-sm text-red-500">
+            {error}
+          </Text>
+        )}
+      </View>
+    );
+  }
+
+  return (
+    <Stack
+      screenOptions={{
+        headerTintColor: "#15803d",
+        headerTitleStyle: { fontWeight: "600" },
+      }}
+    >
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="garment/[id]" options={{ title: "Garment" }} />
+      <Stack.Screen name="outfit/[id]" options={{ title: "Outfit" }} />
+      <Stack.Screen
+        name="style/[garmentId]"
+        options={{ title: "Style This Item" }}
+      />
+    </Stack>
+  );
 }
 
 export default function RootLayout() {

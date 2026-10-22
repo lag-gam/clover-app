@@ -57,6 +57,8 @@ export function useStyleProfile() {
     loading,
     refresh: load,
     maybeRecalculate,
-    isColdStart: interactionCount < RECALC_INTERVAL,
+    isColdStart:
+      interactionCount < RECALC_INTERVAL &&
+      (profile?.pinterest_pin_count ?? 0) === 0,
   };
 }

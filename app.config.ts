@@ -1,0 +1,31 @@
+import type { ExpoConfig } from "expo/config";
+
+const config: ExpoConfig = {
+  name: "Clover",
+  slug: "Clover",
+  version: "2.0.0",
+  orientation: "portrait",
+  icon: "./assets/icon.png",
+  userInterfaceStyle: "light",
+  scheme: "clover",
+  ios: {
+    supportsTablet: true,
+    bundleIdentifier: "com.clover.closet",
+  },
+  android: {
+    adaptiveIcon: {
+      backgroundColor: "#E6F4FE",
+      foregroundImage: "./assets/android-icon-foreground.png",
+      backgroundImage: "./assets/android-icon-background.png",
+      monochromeImage: "./assets/android-icon-monochrome.png",
+    },
+    package: "com.clover.closet",
+  },
+  web: {
+    favicon: "./assets/favicon.png",
+    bundler: "metro",
+  },
+  plugins: ["expo-router", "expo-web-browser", "expo-font"],
+};
+
+export default config;

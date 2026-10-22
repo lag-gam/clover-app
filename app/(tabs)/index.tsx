@@ -11,6 +11,7 @@ import {
 import { logInteraction } from "@/services/interaction.service";
 import { OutfitCard } from "@/components/OutfitCard";
 import { SwapSheet } from "@/components/SwapSheet";
+import { SagModeToggle } from "@/components/SagModeToggle";
 import { useStyleProfile } from "@/hooks/useStyleProfile";
 import { Garment } from "@/types/database";
 import { Ionicons } from "@expo/vector-icons";
@@ -29,6 +30,8 @@ export default function HomeScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [garmentCount, setGarmentCount] = useState(0);
+  const [sagMode, setSagMode] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
 
   const { profile, maybeRecalculate, isColdStart } = useStyleProfile();
 
@@ -50,6 +53,7 @@ export default function HomeScreen() {
   const generateOutfits = async () => {
     if (!user) return;
     setLoading(true);
+    setGenerationError(null);
 
     try {
       const styleEmbed = profile?.style_embedding as number[] | null;
@@ -57,7 +61,21 @@ export default function HomeScreen() {
       const garments = await fetchGarments(user.id);
       setAllGarments(garments);
 
-      const candidates = generateOutfitCandidates(garments, 10, styleEmbed);
+      const candidates = generateOutfitCandidates(
+        garments,
+        10,
+        styleEmbed,
+        undefined,
+        profile?.pinterest_embedding,
+        { sagMode }
+      );
+      if (candidates.length === 0) {
+        setGenerationError(
+          sagMode
+            ? "Sag mode needs ready tops, bottoms, shoes, and underwear."
+            : "Add ready, compatible tops, bottoms or dresses, and shoes."
+        );
+      }
 
       // Save all as outfits in DB and log "shown"
       const saved: DisplayOutfit[] = [];
@@ -85,6 +103,13 @@ export default function HomeScreen() {
 
     // Trigger style recalculation check
     maybeRecalculate();
+  };
+
+  const handleSagModeChange = (value: boolean) => {
+    setSagMode(value);
+    setOutfits([]);
+    setCurrentIndex(0);
+    setGenerationError(null);
   };
 
   const handleGarmentTap = (garment: Garment) => {
@@ -168,6 +193,14 @@ export default function HomeScreen() {
             ? `You reviewed ${outfits.length} outfits. Generate more?`
             : "Generate outfit recommendations from your closet"}
         </Text>
+        <View className="mt-5 w-full">
+          <SagModeToggle value={sagMode} onValueChange={handleSagModeChange} />
+        </View>
+        {generationError && (
+          <Text className="mt-3 text-center text-sm text-red-600">
+            {generationError}
+          </Text>
+        )}
         <TouchableOpacity
           className="bg-clover-600 rounded-lg py-3 px-8 mt-6"
           onPress={generateOutfits}
@@ -192,6 +225,9 @@ export default function HomeScreen() {
         <Text className="text-xs text-gray-400 text-center">
           {currentIndex + 1} / {outfits.length}
         </Text>
+        <View className="mt-2">
+          <SagModeToggle value={sagMode} onValueChange={handleSagModeChange} />
+        </View>
       </View>
 
       <OutfitCard

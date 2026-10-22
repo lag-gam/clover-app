@@ -2,13 +2,13 @@ import { useRef } from "react";
 import {
   View,
   Text,
-  Image,
   Animated,
   PanResponder,
   Dimensions,
   TouchableWithoutFeedback,
 } from "react-native";
 import { Garment } from "@/types/database";
+import { FlatLayCollage } from "@/components/FlatLayCollage";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
@@ -96,12 +96,6 @@ export function OutfitCard({
     outputRange: [0.5, 0.8, 1, 0.8, 0.5],
   });
 
-  // Sort garments in display order
-  const slotOrder = ["outerwear", "top", "dress", "bottom", "shoes", "accessory"];
-  const sorted = [...garments].sort(
-    (a, b) => slotOrder.indexOf(a.slot) - slotOrder.indexOf(b.slot)
-  );
-
   return (
     <Animated.View
       {...panResponder.panHandlers}
@@ -139,28 +133,11 @@ export function OutfitCard({
             </Animated.Text>
           </View>
 
-          {/* Garment stack */}
-          <View className="items-center gap-1">
-            {sorted.map(({ garment, slot }) => (
-              <TouchableWithoutFeedback
-                key={garment.id}
-                onPress={() => onGarmentTap(garment)}
-              >
-                <View className="items-center">
-                  <Image
-                    source={{
-                      uri: garment.cutout_url ?? garment.image_url,
-                    }}
-                    className="w-32 h-32"
-                    resizeMode="contain"
-                  />
-                  <Text className="text-xs text-gray-400 capitalize">
-                    {slot}
-                  </Text>
-                </View>
-              </TouchableWithoutFeedback>
-            ))}
-          </View>
+          <FlatLayCollage
+            items={garments}
+            onGarmentPress={onGarmentTap}
+            accessibilityLabel="Recommended outfit flat lay"
+          />
 
           {/* Score */}
           {score !== null && score > 0 && (

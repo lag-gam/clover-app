@@ -1,13 +1,37 @@
-import { View, Text, Image, TouchableOpacity } from "react-native";
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  ActivityIndicator,
+  GestureResponderEvent,
+} from "react-native";
 import { Garment } from "@/types/database";
+import { Ionicons } from "@expo/vector-icons";
+import { isGarmentProcessingStale } from "@/services/garment.service";
 
 interface GarmentCardProps {
   garment: Garment;
   onPress: () => void;
+  onRetry?: () => void;
 }
 
-export function GarmentCard({ garment, onPress }: GarmentCardProps) {
+export function GarmentCard({
+  garment,
+  onPress,
+  onRetry,
+}: GarmentCardProps) {
   const imageUri = garment.cutout_url ?? garment.image_url;
+  const isProcessing =
+    garment.processing_status === "pending" ||
+    garment.processing_status === "processing";
+  const isStale = isGarmentProcessingStale(garment);
+  const isRetryable = garment.processing_status === "failed" || isStale;
+
+  const handleRetry = (event: GestureResponderEvent) => {
+    event.stopPropagation();
+    onRetry?.();
+  };
 
   return (
     <TouchableOpacity
@@ -21,14 +45,39 @@ export function GarmentCard({ garment, onPress }: GarmentCardProps) {
           className="w-full h-full"
           resizeMode="contain"
         />
+        {isProcessing && !isStale && (
+          <View className="absolute inset-0 bg-white/80 items-center justify-center">
+            <ActivityIndicator color="#16a34a" />
+            <Text className="text-[10px] text-gray-600 mt-2">Analyzing</Text>
+          </View>
+        )}
+        {isRetryable && (
+          <View className="absolute top-2 right-2 bg-red-50 rounded-full p-1">
+            <Ionicons name="alert-circle" size={16} color="#ef4444" />
+          </View>
+        )}
       </View>
       <View className="p-2">
         <Text className="text-xs font-medium text-gray-800" numberOfLines={1}>
           {garment.name}
         </Text>
         <Text className="text-xs text-gray-400 capitalize">
-          {garment.category}
+          {garment.processing_status === "ready"
+            ? garment.category
+            : isStale
+              ? "analysis stalled"
+              : garment.processing_status}
         </Text>
+        {isRetryable && onRetry && (
+          <TouchableOpacity
+            className="mt-2 bg-red-50 rounded py-1 items-center"
+            onPress={handleRetry}
+          >
+            <Text className="text-[10px] font-semibold text-red-600">
+              Retry analysis
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
     </TouchableOpacity>
   );
