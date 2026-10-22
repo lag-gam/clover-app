@@ -1,19 +1,22 @@
-# Clover - Landing Page
+# Clover AI Closet v2
 
-A beautiful, modern landing page for Clover, the sustainable fashion app that helps users digitize their closets, track outfits, and build intentional wardrobes.
+Photograph garments, browse your digital closet, generate outfits, rate them, and get personalized recommendations that improve over time.
 
 ## About Clover
 
-**A closet you love. A planet you save.**
+- **Frontend**: Expo SDK 57, React Native, Expo Router (file-based routing), TypeScript, NativeWind (Tailwind CSS)
+- **Backend**: Supabase (auth, Postgres, Storage)
+- **AI**: OpenAI GPT-4o Vision (metadata extraction), text-embedding-3-small (256-dim embeddings), remove.bg (background removal)
 
-Clover helps you digitize your closet, track your outfits, and build a wardrobe you love—without buying more. Fight fast fashion. Shop with intention. Style with purpose.
+## Prerequisites
 
-### Key Features
-- **Digitize Your Closet**: AI-powered organization of your wardrobe
-- **Track Your Outfits**: Plan and record daily looks
-- **Shop with Intention**: Analyze wardrobe gaps and make informed purchases
-- **Community Marketplace**: Peer-to-peer swapping and selling (coming soon)
-- **In-store scanning**: Scan barcodes and run real time how it fits in with your closet <Freemium> (coming soon)
+1. **Supabase project** — create at [supabase.com](https://supabase.com), then apply the SQL migrations in `supabase/migrations/`
+2. **OpenAI API key** — from [platform.openai.com](https://platform.openai.com)
+3. **remove.bg API key** — from [remove.bg](https://www.remove.bg/api) (50 free calls/month)
+4. **Google Cloud OAuth client** — Web client configured through Supabase Auth
+5. **Node.js 22.13+** — required by Expo SDK 57
+6. **Expo Go** — install the latest App Store version on your iPhone
 
+## Setup
 
 **Built with <3 for sustainable fashion** 
