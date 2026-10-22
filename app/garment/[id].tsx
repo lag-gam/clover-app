@@ -88,7 +88,7 @@ export default function GarmentDetailScreen() {
       name: garment.name,
       category: garment.category,
       subtype: garment.subtype,
-      metal_tone: garment.metal_tone,
+      metal_tone: garment.metal_tone ?? "none",
       color: garment.color,
       secondary_color: garment.secondary_color,
       pattern: garment.pattern,
@@ -385,7 +385,7 @@ export default function GarmentDetailScreen() {
               {garment.subtype && (
                 <Badge label={garment.subtype.replaceAll("_", " ")} />
               )}
-              {garment.metal_tone !== "none" && (
+              {garment.metal_tone && garment.metal_tone !== "none" && (
                 <Badge
                   label={`${garment.metal_tone.replaceAll("_", " ")} tone`}
                 />
