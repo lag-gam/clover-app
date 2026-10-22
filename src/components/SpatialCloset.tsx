@@ -1,6 +1,7 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  GestureResponderEvent,
   Image,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -9,6 +10,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -23,6 +25,7 @@ import {
   Garment,
 } from "@/types/database";
 import { isGarmentProcessingStale } from "@/services/garment.service";
+import { getClosetLayout } from "@/utils/closet-layout";
 
 const ITEM_WIDTH = 84;
 const ITEM_HEIGHT = 112;
@@ -169,6 +172,99 @@ function DraggableGarment({
   );
 }
 
+function FullSizeGarment({
+  garment,
+  pageWidth,
+  imageHeight,
+  onPress,
+  onRetry,
+}: {
+  garment: Garment;
+  pageWidth: number;
+  imageHeight: number;
+  onPress: () => void;
+  onRetry: () => void;
+}) {
+  const imageUri = garment.cutout_url ?? garment.image_url;
+  const isProcessing =
+    garment.processing_status === "pending" ||
+    garment.processing_status === "processing";
+  const isStale = isGarmentProcessingStale(garment);
+  const isRetryable = garment.processing_status === "failed" || isStale;
+
+  const retry = (event: GestureResponderEvent) => {
+    event.stopPropagation();
+    onRetry();
+  };
+
+  return (
+    <TouchableOpacity
+      accessibilityRole="button"
+      accessibilityLabel={`View ${garment.name}`}
+      activeOpacity={0.88}
+      onPress={onPress}
+      style={[styles.fullGarmentPage, { width: pageWidth }]}
+    >
+      <View style={[styles.fullGarmentImageRegion, { height: imageHeight }]}>
+        <Image
+          accessibilityIgnoresInvertColors
+          source={{ uri: imageUri }}
+          resizeMode="contain"
+          style={[
+            styles.fullGarmentImage,
+            {
+              width: Math.max(240, pageWidth - 40),
+              height: imageHeight - 32,
+            },
+          ]}
+        />
+        {isProcessing && !isStale && (
+          <View style={styles.fullProcessingOverlay}>
+            <ActivityIndicator size="large" color="#173F32" />
+            <Text style={styles.fullProcessingText}>Analyzing garment…</Text>
+          </View>
+        )}
+        {isRetryable && (
+          <View style={styles.fullFailedBadge}>
+            <Ionicons name="alert-circle" size={18} color="#b91c1c" />
+            <Text style={styles.fullFailedText}>
+              {isStale ? "Analysis stalled" : "Analysis failed"}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.fullGarmentMeta}>
+        <View style={styles.fullGarmentText}>
+          <Text style={styles.fullGarmentName} numberOfLines={1}>
+            {garment.name}
+          </Text>
+          <Text style={styles.fullGarmentCategory}>
+            {garment.processing_status === "ready"
+              ? garment.category
+              : isStale
+                ? "Needs attention"
+                : garment.processing_status}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={19} color="#77827B" />
+      </View>
+
+      {isRetryable && (
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={`Retry analysis for ${garment.name}`}
+          onPress={retry}
+          style={styles.fullRetryButton}
+        >
+          <Ionicons name="refresh" size={16} color="#991b1b" />
+          <Text style={styles.fullRetryText}>Retry analysis</Text>
+        </TouchableOpacity>
+      )}
+    </TouchableOpacity>
+  );
+}
+
 function SectionDecoration({ kind }: { kind: ClosetSectionKind }) {
   if (kind === "rail") {
     return (
@@ -211,6 +307,12 @@ export function SpatialCloset({
   onMoveSection,
   onMoveGarment,
 }: SpatialClosetProps) {
+  const { width: viewportWidth, height: viewportHeight } =
+    useWindowDimensions();
+  const { pageWidth, imageHeight } = getClosetLayout(
+    viewportWidth,
+    viewportHeight
+  );
   const rootRef = useRef<View>(null);
   const bodyRefs = useRef<Record<string, View | null>>({});
   const sectionFrames = useRef<Record<string, SectionFrame>>({});
@@ -218,6 +320,11 @@ export function SpatialCloset({
   const rootOrigin = useRef({ x: 0, y: 0 });
   const dragRef = useRef<DragState | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
+  const [sectionPages, setSectionPages] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    setSectionPages({});
+  }, [pageWidth]);
 
   const garmentsBySection = useMemo(() => {
     const grouped = new Map<string, Garment[]>();
@@ -336,6 +443,25 @@ export function SpatialCloset({
     sectionOffsets.current[sectionId] = event.nativeEvent.contentOffset.x;
   };
 
+  const handlePageChange = (
+    sectionId: string,
+    itemCount: number,
+    event: NativeSyntheticEvent<NativeScrollEvent>
+  ) => {
+    const nextPage = Math.max(
+      0,
+      Math.min(
+        itemCount - 1,
+        Math.round(event.nativeEvent.contentOffset.x / pageWidth)
+      )
+    );
+    setSectionPages((current) =>
+      current[sectionId] === nextPage
+        ? current
+        : { ...current, [sectionId]: nextPage }
+    );
+  };
+
   return (
     <GestureHandlerRootView style={styles.root}>
       <View
@@ -344,8 +470,15 @@ export function SpatialCloset({
         onLayout={() => requestAnimationFrame(measureAllSections)}
       >
         <ScrollView
-          contentContainerStyle={styles.sectionsContent}
-          onScroll={() => measureAllSections()}
+          directionalLockEnabled
+          nestedScrollEnabled
+          contentContainerStyle={[
+            styles.sectionsContent,
+            !editing && styles.browsingSectionsContent,
+          ]}
+          onScroll={() => {
+            if (editing) measureAllSections();
+          }}
           scrollEventThrottle={32}
           refreshControl={
             <RefreshControl
@@ -355,16 +488,22 @@ export function SpatialCloset({
             />
           }
         >
-          <View style={styles.dragHintRow}>
-            <Ionicons name="hand-left-outline" size={15} color="#78716c" />
-            <Text style={styles.dragHint}>
-              Long press a garment to move it between sections
-            </Text>
-            {mutating && <ActivityIndicator size="small" color="#173F32" />}
-          </View>
+          {editing && (
+            <View style={styles.dragHintRow}>
+              <Ionicons name="hand-left-outline" size={15} color="#78716c" />
+              <Text style={styles.dragHint}>
+                Long press a garment to move it between sections
+              </Text>
+              {mutating && <ActivityIndicator size="small" color="#173F32" />}
+            </View>
+          )}
 
           {sections.map((section, sectionIndex) => {
             const sectionGarments = garmentsBySection.get(section.id) ?? [];
+            const currentPage = Math.min(
+              sectionPages[section.id] ?? 0,
+              Math.max(sectionGarments.length - 1, 0)
+            );
             const dropPosition =
               drag?.target.sectionId === section.id
                 ? drag.target.position
@@ -375,6 +514,7 @@ export function SpatialCloset({
                 key={section.id}
                 style={[
                   styles.sectionCard,
+                  !editing && styles.browsingSectionCard,
                   section.kind === "drawer" && styles.drawerCard,
                   dropPosition !== null && styles.activeDropSection,
                 ]}
@@ -394,7 +534,7 @@ export function SpatialCloset({
                     </View>
                   </View>
 
-                  {editing && (
+                  {editing ? (
                     <View style={styles.editActions}>
                       <TouchableOpacity
                         accessibilityLabel={`Move ${section.name} up`}
@@ -435,6 +575,14 @@ export function SpatialCloset({
                         <Ionicons name="pencil" size={16} color="#12372A" />
                       </TouchableOpacity>
                     </View>
+                  ) : (
+                    <View style={styles.itemCounter}>
+                      <Text style={styles.itemCounterText}>
+                        {sectionGarments.length === 0
+                          ? "Empty"
+                          : `${currentPage + 1} / ${sectionGarments.length}`}
+                      </Text>
+                    </View>
                   )}
                 </View>
 
@@ -445,66 +593,152 @@ export function SpatialCloset({
                   onLayout={() =>
                     requestAnimationFrame(() => measureSection(section.id))
                   }
-                  style={[
-                    styles.sectionBody,
-                    section.kind === "rail" && styles.railBody,
-                    section.kind === "shelf" && styles.shelfBody,
-                    section.kind === "drawer" && styles.drawerBody,
-                  ]}
+                  style={
+                    editing
+                      ? [
+                          styles.sectionBody,
+                          section.kind === "rail" && styles.railBody,
+                          section.kind === "shelf" && styles.shelfBody,
+                          section.kind === "drawer" && styles.drawerBody,
+                        ]
+                      : styles.browsingSectionBody
+                  }
                 >
                   <SectionDecoration kind={section.kind} />
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    onScroll={(event) =>
-                      handleSectionScroll(section.id, event)
-                    }
-                    scrollEventThrottle={16}
-                    contentContainerStyle={[
-                      styles.garmentRow,
-                      sectionGarments.length === 0 && styles.emptyGarmentRow,
-                    ]}
-                  >
-                    {dropPosition !== null && (
-                      <View
-                        pointerEvents="none"
-                        style={[
-                          styles.dropMarker,
-                          {
-                            left:
-                              SECTION_PADDING +
-                              dropPosition * ITEM_WIDTH -
-                              2,
-                          },
-                        ]}
-                      />
-                    )}
-                    {sectionGarments.map((garment) => (
-                      <DraggableGarment
-                        key={garment.id}
-                        garment={garment}
-                        disabled={mutating}
-                        isDragging={drag?.garment.id === garment.id}
-                        onPress={() => onPressGarment(garment)}
-                        onRetry={() => onRetryGarment(garment)}
-                        onDragStart={handleDragStart}
-                        onDragUpdate={handleDragUpdate}
-                        onDragEnd={handleDragEnd}
-                      />
-                    ))}
-                    {sectionGarments.length === 0 && (
-                      <View style={styles.emptySection}>
-                        <Ionicons
-                          name="add-circle-outline"
-                          size={22}
-                          color="#a8a29e"
+                  {editing ? (
+                    <ScrollView
+                      horizontal
+                      nestedScrollEnabled
+                      showsHorizontalScrollIndicator={false}
+                      onScroll={(event) =>
+                        handleSectionScroll(section.id, event)
+                      }
+                      scrollEventThrottle={16}
+                      contentContainerStyle={[
+                        styles.garmentRow,
+                        sectionGarments.length === 0 && styles.emptyGarmentRow,
+                      ]}
+                    >
+                      {dropPosition !== null && (
+                        <View
+                          pointerEvents="none"
+                          style={[
+                            styles.dropMarker,
+                            {
+                              left:
+                                SECTION_PADDING +
+                                dropPosition * ITEM_WIDTH -
+                                2,
+                            },
+                          ]}
                         />
-                        <Text style={styles.emptySectionText}>
-                          Drop garments here
-                        </Text>
+                      )}
+                      {sectionGarments.map((garment) => (
+                        <DraggableGarment
+                          key={garment.id}
+                          garment={garment}
+                          disabled={mutating}
+                          isDragging={drag?.garment.id === garment.id}
+                          onPress={() => onPressGarment(garment)}
+                          onRetry={() => onRetryGarment(garment)}
+                          onDragStart={handleDragStart}
+                          onDragUpdate={handleDragUpdate}
+                          onDragEnd={handleDragEnd}
+                        />
+                      ))}
+                      {sectionGarments.length === 0 && (
+                        <View style={styles.emptySection}>
+                          <Ionicons
+                            name="add-circle-outline"
+                            size={22}
+                            color="#a8a29e"
+                          />
+                          <Text style={styles.emptySectionText}>
+                            Drop garments here
+                          </Text>
+                        </View>
+                      )}
+                    </ScrollView>
+                  ) : sectionGarments.length > 0 ? (
+                    <>
+                      <ScrollView
+                        horizontal
+                        pagingEnabled
+                        nestedScrollEnabled
+                        directionalLockEnabled
+                        disableIntervalMomentum
+                        snapToInterval={pageWidth}
+                        snapToAlignment="start"
+                        decelerationRate="fast"
+                        showsHorizontalScrollIndicator={false}
+                        onMomentumScrollEnd={(event) =>
+                          handlePageChange(
+                            section.id,
+                            sectionGarments.length,
+                            event
+                          )
+                        }
+                        scrollEventThrottle={16}
+                      >
+                        {sectionGarments.map((garment) => (
+                          <FullSizeGarment
+                            key={garment.id}
+                            garment={garment}
+                            pageWidth={pageWidth}
+                            imageHeight={imageHeight}
+                            onPress={() => onPressGarment(garment)}
+                            onRetry={() => onRetryGarment(garment)}
+                          />
+                        ))}
+                      </ScrollView>
+                      <View style={styles.pageProgress}>
+                        {sectionGarments.length <= 7 ? (
+                          sectionGarments.map((garment, index) => (
+                            <View
+                              key={garment.id}
+                              style={[
+                                styles.pageDot,
+                                index === currentPage && styles.activePageDot,
+                              ]}
+                            />
+                          ))
+                        ) : (
+                          <View style={styles.progressTrack}>
+                            <View
+                              style={[
+                                styles.progressFill,
+                                {
+                                  width: `${
+                                    ((currentPage + 1) /
+                                      sectionGarments.length) *
+                                    100
+                                  }%`,
+                                },
+                              ]}
+                            />
+                          </View>
+                        )}
                       </View>
-                    )}
-                  </ScrollView>
+                    </>
+                  ) : (
+                    <View
+                      style={[styles.fullEmptySection, { height: imageHeight }]}
+                    >
+                      <View style={styles.emptySectionIcon}>
+                        <Ionicons
+                          name="shirt-outline"
+                          size={30}
+                          color="#789A82"
+                        />
+                      </View>
+                      <Text style={styles.fullEmptyTitle}>
+                        This section is ready
+                      </Text>
+                      <Text style={styles.fullEmptyText}>
+                        Use Edit sections to move a garment here.
+                      </Text>
+                    </View>
+                  )}
                 </View>
               </View>
             );
@@ -546,6 +780,12 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
     gap: 14,
   },
+  browsingSectionsContent: {
+    paddingHorizontal: 0,
+    paddingTop: 10,
+    paddingBottom: 48,
+    gap: 18,
+  },
   dragHintRow: {
     minHeight: 28,
     flexDirection: "row",
@@ -565,7 +805,12 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 0,
     overflow: "hidden",
-    transform: [{ perspective: 900 }, { rotateX: "0.4deg" }],
+  },
+  browsingSectionCard: {
+    borderLeftWidth: 0,
+    borderRightWidth: 0,
+    borderRadius: 0,
+    backgroundColor: "#fcfbf7",
   },
   drawerCard: { backgroundColor: "#f2f4ed", borderColor: "#d1ddd2" },
   activeDropSection: { borderColor: "#789a82", borderWidth: 2 },
@@ -593,6 +838,23 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     color: "#a8a29e",
   },
+  itemCounter: {
+    minWidth: 52,
+    minHeight: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#d1ddd2",
+    backgroundColor: "#f7f8f3",
+    paddingHorizontal: 9,
+  },
+  itemCounterText: {
+    color: "#4e765e",
+    fontSize: 11,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
+  },
   editActions: { flexDirection: "row", alignItems: "center", gap: 5 },
   iconButton: {
     width: 30,
@@ -606,6 +868,13 @@ const styles = StyleSheet.create({
   },
   disabledButton: { opacity: 0.3 },
   sectionBody: { minHeight: 144, position: "relative" },
+  browsingSectionBody: {
+    position: "relative",
+    overflow: "hidden",
+    borderTopWidth: 1,
+    borderTopColor: "#d1ddd2",
+    backgroundColor: "#f2f4ed",
+  },
   railBody: {
     backgroundColor: "#f5f5f4",
     borderTopWidth: 1,
@@ -669,6 +938,155 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#d6cec3",
+  },
+  fullGarmentPage: {
+    alignItems: "center",
+    backgroundColor: "transparent",
+  },
+  fullGarmentImageRegion: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingTop: 18,
+  },
+  fullGarmentImage: {
+    alignSelf: "center",
+  },
+  fullProcessingOverlay: {
+    position: "absolute",
+    top: 18,
+    right: 18,
+    bottom: 0,
+    left: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 18,
+    backgroundColor: "rgba(247,248,243,0.9)",
+  },
+  fullProcessingText: {
+    marginTop: 10,
+    color: "#4e765e",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  fullFailedBadge: {
+    position: "absolute",
+    top: 30,
+    right: 18,
+    minHeight: 32,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#fecaca",
+    backgroundColor: "rgba(254,242,242,0.96)",
+    paddingHorizontal: 10,
+  },
+  fullFailedText: {
+    color: "#991b1b",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  fullGarmentMeta: {
+    minHeight: 66,
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(209,221,210,0.72)",
+    backgroundColor: "rgba(252,251,247,0.9)",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  fullGarmentText: { flex: 1, paddingRight: 12 },
+  fullGarmentName: {
+    color: "#202823",
+    fontSize: 17,
+    fontWeight: "700",
+  },
+  fullGarmentCategory: {
+    marginTop: 3,
+    color: "#77827b",
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 0.7,
+    textTransform: "uppercase",
+  },
+  fullRetryButton: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    borderTopWidth: 1,
+    borderTopColor: "#fecaca",
+    backgroundColor: "#fef2f2",
+    paddingHorizontal: 16,
+  },
+  fullRetryText: {
+    color: "#991b1b",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  pageProgress: {
+    minHeight: 28,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(209,221,210,0.72)",
+    backgroundColor: "#fcfbf7",
+    paddingHorizontal: 20,
+  },
+  pageDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "#adc3b3",
+  },
+  activePageDot: {
+    width: 16,
+    backgroundColor: "#173f32",
+  },
+  progressTrack: {
+    width: "38%",
+    height: 3,
+    overflow: "hidden",
+    borderRadius: 2,
+    backgroundColor: "#d1ddd2",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 2,
+    backgroundColor: "#173f32",
+  },
+  fullEmptySection: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 36,
+  },
+  emptySectionIcon: {
+    width: 58,
+    height: 58,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#d1ddd2",
+    backgroundColor: "rgba(252,251,247,0.76)",
+  },
+  fullEmptyTitle: {
+    marginTop: 14,
+    color: "#202823",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  fullEmptyText: {
+    marginTop: 5,
+    color: "#77827b",
+    fontSize: 12,
+    textAlign: "center",
   },
   garmentRow: {
     minWidth: "100%",

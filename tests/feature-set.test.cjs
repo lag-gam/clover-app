@@ -14,6 +14,9 @@ const {
 const {
   runBoundedBatch,
 } = require("../.feature-test-build/utils/bounded-batch.js");
+const {
+  getClosetLayout,
+} = require("../.feature-test-build/utils/closet-layout.js");
 
 const garment = {
   image_url: "front-original",
@@ -111,6 +114,21 @@ test("bounded batch limits concurrency and preserves partial successes", async (
   assert.equal(progress.length, 5);
   assert.equal(progress.filter((status) => status === "fulfilled").length, 4);
   assert.equal(progress.filter((status) => status === "rejected").length, 1);
+});
+
+test("closet pages stay full width with a two-thirds-height image region", () => {
+  assert.deepEqual(getClosetLayout(375, 667), {
+    pageWidth: 375,
+    imageHeight: 447,
+  });
+  assert.deepEqual(getClosetLayout(1024, 1366), {
+    pageWidth: 1024,
+    imageHeight: 620,
+  });
+  assert.deepEqual(getClosetLayout(260, 480), {
+    pageWidth: 280,
+    imageHeight: 360,
+  });
 });
 
 test("durable swap RPC enforces authenticated ownership", () => {
