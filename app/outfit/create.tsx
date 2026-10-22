@@ -117,25 +117,21 @@ const OutfitNameField = memo(function OutfitNameField({
 const CreateOutfitHeader = memo(function CreateOutfitHeader({
   collageItems,
   selectedCount,
-  saving,
   category,
   subtype,
   nameRef,
   onClear,
   onItemPress,
-  onSave,
   onCategoryChange,
   onSubtypeChange,
 }: {
   collageItems: FlatLayItem[];
   selectedCount: number;
-  saving: boolean;
   category: GarmentCategory | null;
   subtype: GarmentSubtype | null;
   nameRef: MutableRefObject<string>;
   onClear: () => void;
   onItemPress: (item: FlatLayItem) => void;
-  onSave: () => void;
   onCategoryChange: (value: GarmentCategory | null) => void;
   onSubtypeChange: (value: GarmentSubtype | null) => void;
 }) {
@@ -186,28 +182,6 @@ const CreateOutfitHeader = memo(function CreateOutfitHeader({
         )}
 
         <OutfitNameField nameRef={nameRef} />
-        <TouchableOpacity
-          disabled={selectedCount < 2 || saving}
-          onPress={onSave}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: selectedCount < 2 || saving }}
-          className={`mt-3 min-h-11 items-center rounded-xl bg-clover-600 py-4 ${
-            selectedCount < 2 || saving ? "opacity-40" : ""
-          }`}
-        >
-          {saving ? (
-            <ActivityIndicator color="#ffffff" />
-          ) : (
-            <Text className="font-bold text-white">
-              Save outfit · {selectedCount} selected
-            </Text>
-          )}
-        </TouchableOpacity>
-        {selectedCount === 1 && (
-          <Text className="mt-2 text-center text-xs text-amber-700">
-            Add one more garment to save this outfit.
-          </Text>
-        )}
       </View>
 
       <View className="border-t border-stone-200 bg-white pb-3 pt-4">
@@ -419,13 +393,11 @@ export default function CreateOutfitScreen() {
       <CreateOutfitHeader
         collageItems={collageItems}
         selectedCount={selected.length}
-        saving={saving}
         category={category}
         subtype={subtype}
         nameRef={nameRef}
         onClear={clearSelected}
         onItemPress={setActionItem}
-        onSave={() => void save()}
         onCategoryChange={setCategory}
         onSubtypeChange={setSubtype}
       />
@@ -434,8 +406,6 @@ export default function CreateOutfitScreen() {
       category,
       clearSelected,
       collageItems,
-      save,
-      saving,
       selected.length,
       subtype,
     ]
@@ -460,7 +430,7 @@ export default function CreateOutfitScreen() {
         numColumns={3}
         keyExtractor={(item) => item.id}
         ListHeaderComponent={listHeader}
-        contentContainerClassName="pb-8"
+        contentContainerClassName="pb-4"
         columnWrapperClassName="px-2"
         renderItem={renderItem}
         extraData={selectedIds}
@@ -488,6 +458,30 @@ export default function CreateOutfitScreen() {
           </View>
         }
       />
+      <View className="border-t border-stone-200 bg-[#FCFBF7] px-4 pb-6 pt-3">
+        {selected.length === 1 && (
+          <Text className="mb-2 text-center text-xs text-amber-700">
+            Add one more garment to save this outfit.
+          </Text>
+        )}
+        <TouchableOpacity
+          disabled={selected.length < 2 || saving}
+          onPress={() => void save()}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: selected.length < 2 || saving }}
+          className={`min-h-11 items-center rounded-xl bg-clover-600 py-4 ${
+            selected.length < 2 || saving ? "opacity-40" : ""
+          }`}
+        >
+          {saving ? (
+            <ActivityIndicator color="#ffffff" />
+          ) : (
+            <Text className="font-bold text-white">
+              Save outfit · {selected.length} selected
+            </Text>
+          )}
+        </TouchableOpacity>
+      </View>
       <OutfitItemActionSheet
         item={actionItem}
         visible={Boolean(actionItem)}

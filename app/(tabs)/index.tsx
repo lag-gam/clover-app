@@ -17,7 +17,9 @@ import {
   swapPersistedOutfitItem,
 } from "@/services/outfit.service";
 import { logInteraction } from "@/services/interaction.service";
+import { HomeGestureCoach } from "@/components/HomeGestureCoach";
 import { OutfitCard } from "@/components/OutfitCard";
+import { useHomeGestureCoach } from "@/hooks/useHomeGestureCoach";
 import {
   FlatLayItem,
 } from "@/components/FlatLayCollage";
@@ -46,13 +48,17 @@ export default function HomeScreen() {
   const [actionItem, setActionItem] = useState<FlatLayItem | null>(null);
   const [savingOutfit, setSavingOutfit] = useState(false);
   const [savedIndexes, setSavedIndexes] = useState<Set<number>>(new Set());
-  const [ratingFeedback, setRatingFeedback] = useState<
-    "liked" | "disliked" | "skipped" | "saved" | null
-  >(null);
+  const [likedIndexes, setLikedIndexes] = useState<Set<number>>(new Set());
   const advancingRef = useRef(false);
+  const likedIndexesRef = useRef(likedIndexes);
+  const savedIndexesRef = useRef(savedIndexes);
+  likedIndexesRef.current = likedIndexes;
+  savedIndexesRef.current = savedIndexes;
 
   const { profile, maybeRecalculate, isColdStart } = useStyleProfile();
   const { sagMode, reload: reloadSagMode } = useSagMode();
+  const { visible: showGestureCoach, dismiss: dismissGestureCoach } =
+    useHomeGestureCoach();
 
   // Swap sheet state
   const [swapTarget, setSwapTarget] = useState<Garment | null>(null);
@@ -117,7 +123,7 @@ export default function HomeScreen() {
       setOutfits(saved);
       setCurrentIndex(0);
       setSavedIndexes(new Set());
-      setRatingFeedback(null);
+      setLikedIndexes(new Set());
       advancingRef.current = false;
     } catch (e) {
       console.error("Generation error:", e);
@@ -126,26 +132,49 @@ export default function HomeScreen() {
     }
   };
 
-  const advanceAfterRating = (
-    type: "liked" | "disliked" | "skipped" | "saved"
-  ) => {
+  const advanceFeed = () => {
     if (advancingRef.current) return false;
     advancingRef.current = true;
-    setRatingFeedback(type);
-    setTimeout(() => {
-      setCurrentIndex((index) => index + 1);
-      setRatingFeedback(null);
-      advancingRef.current = false;
-    }, 420);
+    setCurrentIndex((index) => index + 1);
+    advancingRef.current = false;
     return true;
   };
 
-  const handleInteraction = (type: "liked" | "disliked" | "skipped") => {
+  const handleLike = () => {
     const current = outfits[currentIndex];
-    if (!current || !advanceAfterRating(type)) return;
-
+    if (!current || likedIndexes.has(currentIndex) || savedIndexes.has(currentIndex)) {
+      return;
+    }
+    setLikedIndexes((indexes) => new Set(indexes).add(currentIndex));
     if (current.savedId && user) {
-      void logInteraction(user.id, current.savedId, type).catch((error) => {
+      void logInteraction(user.id, current.savedId, "liked").catch((error) => {
+        console.error("Could not save rating:", error);
+      });
+      void maybeRecalculate().catch((error) => {
+        console.error("Style recalculation failed:", error);
+      });
+    }
+  };
+
+  const handlePass = () => {
+    const current = outfits[currentIndex];
+    if (!current || !advanceFeed()) return;
+
+    const alreadyPositive =
+      likedIndexesRef.current.has(currentIndex) ||
+      savedIndexesRef.current.has(currentIndex);
+    if (current.savedId && user && !alreadyPositive) {
+      void logInteraction(user.id, current.savedId, "skipped").catch((error) => {
+        console.error("Could not save rating:", error);
+      });
+    }
+  };
+
+  const handleDislike = () => {
+    const current = outfits[currentIndex];
+    if (!current || !advanceFeed()) return;
+    if (current.savedId && user) {
+      void logInteraction(user.id, current.savedId, "disliked").catch((error) => {
         console.error("Could not save rating:", error);
       });
       void maybeRecalculate().catch((error) => {
@@ -247,14 +276,9 @@ export default function HomeScreen() {
 
   const saveCurrent = async () => {
     const current = outfits[currentIndex];
-    if (!current || !user) {
-      throw new Error("Could not save outfit");
-    }
-    if (savedIndexes.has(currentIndex)) {
-      advanceAfterRating("saved");
+    if (!current || !user || savedIndexes.has(currentIndex) || savingOutfit) {
       return;
     }
-    if (savingOutfit) return;
     setSavingOutfit(true);
     try {
       const saved = await saveOutfit(user.id, current, true);
@@ -264,16 +288,15 @@ export default function HomeScreen() {
         await logInteraction(user.id, current.savedId, "liked");
       }
       setSavedIndexes((indexes) => new Set(indexes).add(currentIndex));
+      setLikedIndexes((indexes) => new Set(indexes).add(currentIndex));
       void maybeRecalculate().catch((error) => {
         console.error("Style recalculation failed:", error);
       });
-      advanceAfterRating("saved");
     } catch (error) {
       Alert.alert(
         "Could not save outfit",
         error instanceof Error ? error.message : "Please try again."
       );
-      throw error;
     } finally {
       setSavingOutfit(false);
     }
@@ -283,7 +306,7 @@ export default function HomeScreen() {
     <TouchableOpacity
       accessibilityRole="button"
       onPress={() => router.push("/outfit/create")}
-      className="mt-4 flex-row items-center justify-center rounded-2xl border border-clover-200 bg-clover-100 px-5 py-3"
+      className="flex-row items-center justify-center rounded-2xl border border-clover-200 bg-clover-100 px-5 py-3"
     >
       <Ionicons name="add-circle-outline" size={20} color="#12372A" />
       <Text className="ml-2 font-semibold text-clover-700">
@@ -296,14 +319,24 @@ export default function HomeScreen() {
   if (garmentCount < 3) {
     return (
       <View className="flex-1 bg-clover-50 items-center justify-center px-8">
-        <Ionicons name="shirt-outline" size={48} color="#d1d5db" />
-        <Text className="text-lg text-gray-400 mt-4 text-center">
-          Add at least 3 garments (top, bottom, shoes) to generate outfits
+        <Ionicons name="shirt-outline" size={48} color="#173F32" />
+        <Text className="mt-4 text-center text-xl font-semibold text-stone-800">
+          Photograph your clothes
         </Text>
-        <Text className="text-sm text-gray-300 mt-1">
+        <Text className="mt-2 text-center text-base text-stone-500">
+          Add at least 3 ready garments — a top, a bottom or dress, and shoes —
+          to generate outfits.
+        </Text>
+        <Text className="mt-2 text-sm text-stone-400">
           You have {garmentCount} garment{garmentCount !== 1 ? "s" : ""}
         </Text>
-        {manualBuilderButton}
+        <TouchableOpacity
+          accessibilityRole="button"
+          onPress={() => router.push("/(tabs)/add")}
+          className="mt-6 min-h-11 items-center rounded-xl bg-clover-600 px-8 py-3"
+        >
+          <Text className="font-bold text-white">Add garments</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -342,7 +375,7 @@ export default function HomeScreen() {
         >
           <Text className="text-white font-semibold">Generate Outfits</Text>
         </TouchableOpacity>
-        {manualBuilderButton}
+        <View className="mt-4">{manualBuilderButton}</View>
         {isColdStart && (
           <Text className="text-xs text-gray-400 mt-3 text-center px-4">
             Keep rating outfits to improve your recommendations
@@ -355,57 +388,44 @@ export default function HomeScreen() {
   const current = outfits[currentIndex];
 
   return (
-    <View className="flex-1 bg-clover-50 justify-center">
-      {/* Progress */}
-      <View className="px-4 pt-2 pb-1">
-        <Text className="text-xs text-gray-400 text-center">
-          {currentIndex + 1} / {outfits.length}
-        </Text>
-        {manualBuilderButton}
+    <View className="flex-1 bg-clover-50">
+      <View className="flex-row items-center justify-between px-4 pb-1 pt-2">
+        <View>
+          <Text className="text-xs text-stone-400">
+            {currentIndex + 1} / {outfits.length}
+          </Text>
+          <Text className="text-[11px] text-stone-400">
+            Swipe up next · Double tap like
+          </Text>
+        </View>
+        <TouchableOpacity
+          accessibilityRole="button"
+          onPress={() => router.push("/outfit/create")}
+          className="flex-row items-center rounded-full bg-clover-100 px-3 py-1.5"
+        >
+          <Ionicons name="add" size={14} color="#12372A" />
+          <Text className="ml-1 text-[11px] font-semibold text-clover-700">
+            Create
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      <View>
-        <OutfitCard
-          key={current.savedId ?? `outfit-${currentIndex}`}
-          garments={current.garments}
-          score={current.score}
-          onLike={() => handleInteraction("liked")}
-          onDislike={() => handleInteraction("disliked")}
-          onSkip={() => handleInteraction("skipped")}
-          onSave={() => saveCurrent()}
-          onItemTap={setActionItem}
-        />
-        {ratingFeedback && (
-          <View
-            pointerEvents="none"
-            className="absolute inset-0 items-center justify-center"
-          >
-            <View
-              className={`h-24 w-24 items-center justify-center rounded-full ${
-                ratingFeedback === "liked" || ratingFeedback === "saved"
-                  ? "bg-clover-600"
-                  : ratingFeedback === "disliked"
-                    ? "bg-red-500"
-                    : "bg-stone-400"
-              }`}
-            >
-              <Ionicons
-                name={
-                  ratingFeedback === "saved"
-                    ? "add"
-                    : ratingFeedback === "liked"
-                      ? "checkmark"
-                      : ratingFeedback === "disliked"
-                        ? "close"
-                        : "arrow-down"
-                }
-                size={48}
-                color="#ffffff"
-              />
-            </View>
-          </View>
-        )}
-      </View>
+      <OutfitCard
+        key={current.savedId ?? `outfit-${currentIndex}`}
+        garments={current.garments}
+        score={current.score}
+        saved={savedIndexes.has(currentIndex)}
+        saving={savingOutfit}
+        onLike={handleLike}
+        onPass={handlePass}
+        onDislike={handleDislike}
+        onSave={() => void saveCurrent()}
+        onItemTap={setActionItem}
+      />
+      <HomeGestureCoach
+        visible={showGestureCoach}
+        onDismiss={dismissGestureCoach}
+      />
 
       {/* Swap sheet */}
       {swapTarget && (

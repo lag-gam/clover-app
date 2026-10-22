@@ -59,10 +59,10 @@ export default function ClosetScreen() {
   } = useCloset();
   const [view, setView] = useState<ClosetView>(
     viewParam === "outfits" ||
-      viewParam === "grid" ||
+      viewParam === "spatial" ||
       viewParam === "laundry"
       ? viewParam
-      : "spatial"
+      : "grid"
   );
   const [savedOutfits, setSavedOutfits] = useState<OutfitWithItems[]>([]);
   const [outfitsLoading, setOutfitsLoading] = useState(false);

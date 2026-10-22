@@ -125,44 +125,73 @@ export default function CalendarScreen() {
     ];
   }, [month]);
 
-  const chooseDate = async (date: string) => {
+  const formatDay = (date: string) =>
+    new Intl.DateTimeFormat(undefined, {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+    }).format(parseLocalDateKey(date));
+
+  const chooseDate = (date: string) => {
     setSelectedDate(date);
     if (!user || mutating) return;
 
     if (reschedulingId) {
-      setMutating(true);
-      try {
-        await rescheduleOutfit(reschedulingId, date);
-        setReschedulingId(null);
-        await load();
-      } catch (mutationError) {
-        Alert.alert(
-          "Could not reschedule",
-          mutationError instanceof Error
-            ? mutationError.message
-            : "Please try again."
-        );
-      } finally {
-        setMutating(false);
-      }
+      Alert.alert(
+        "Move this look?",
+        `Reschedule it to ${formatDay(date)}?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Move",
+            onPress: () => {
+              setMutating(true);
+              void rescheduleOutfit(reschedulingId, date)
+                .then(() => {
+                  setReschedulingId(null);
+                  return load();
+                })
+                .catch((mutationError: unknown) => {
+                  Alert.alert(
+                    "Could not reschedule",
+                    mutationError instanceof Error
+                      ? mutationError.message
+                      : "Please try again."
+                  );
+                })
+                .finally(() => setMutating(false));
+            },
+          },
+        ]
+      );
       return;
     }
 
-    if (selectedOutfitId) {
-      setMutating(true);
-      try {
-        await scheduleOutfit(user.id, selectedOutfitId, date);
-        await load();
-      } catch (mutationError) {
-        Alert.alert(
-          "Could not schedule outfit",
-          mutationError instanceof Error
-            ? mutationError.message
-            : "Please try again."
-        );
-      } finally {
-        setMutating(false);
-      }
+    if (selectedOutfitId && selectedOutfit) {
+      Alert.alert(
+        "Schedule this look?",
+        `Add ${outfitLabel(selectedOutfit, outfits)} to ${formatDay(date)}?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Schedule",
+            onPress: () => {
+              setMutating(true);
+              void scheduleOutfit(user.id, selectedOutfitId, date)
+                .then(load)
+                .catch((mutationError: unknown) => {
+                  Alert.alert(
+                    "Could not schedule outfit",
+                    mutationError instanceof Error
+                      ? mutationError.message
+                      : "Please try again."
+                  );
+                })
+                .finally(() => setMutating(false));
+            },
+          },
+        ]
+      );
     }
   };
 
@@ -268,7 +297,7 @@ export default function CalendarScreen() {
             return (
               <Pressable
                 key={date}
-                onPress={() => void chooseDate(date)}
+                onPress={() => chooseDate(date)}
                 disabled={mutating}
                 accessibilityRole="button"
                 accessibilityState={{ selected, disabled: mutating }}
@@ -328,7 +357,7 @@ export default function CalendarScreen() {
             <Text className="ml-2 flex-1 text-sm font-medium text-clover-800">
               {reschedulingId
                 ? "Choose a new date for this outfit."
-                : `Scheduling “${outfitLabel(selectedOutfit!, outfits)}” — tap a date.`}
+                : `Scheduling “${outfitLabel(selectedOutfit!, outfits)}” — tap a day, then confirm.`}
             </Text>
             <TouchableOpacity
               onPress={() => {

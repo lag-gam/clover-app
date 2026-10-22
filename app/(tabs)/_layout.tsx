@@ -19,12 +19,17 @@ export default function TabLayout() {
       screenOptions={{
         tabBarActiveTintColor: ACTIVE,
         tabBarInactiveTintColor: INACTIVE,
-        tabBarShowLabel: false,
+        tabBarShowLabel: true,
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: "600",
+          marginTop: 2,
+        },
         tabBarHideOnKeyboard: true,
         tabBarStyle: {
-          height: Platform.OS === "ios" ? 78 : 64,
-          paddingTop: 8,
-          paddingBottom: Platform.OS === "ios" ? 18 : 8,
+          height: Platform.OS === "ios" ? 84 : 70,
+          paddingTop: 6,
+          paddingBottom: Platform.OS === "ios" ? 20 : 8,
           backgroundColor: "#FCFBF7",
           borderTopColor: "#DCE3DC",
           borderTopWidth: 1,

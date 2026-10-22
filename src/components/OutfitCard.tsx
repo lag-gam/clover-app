@@ -5,54 +5,77 @@ import {
   Animated,
   PanResponder,
   Dimensions,
-  TouchableWithoutFeedback,
+  Pressable,
+  ActivityIndicator,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Garment } from "@/types/database";
 import { FlatLayCollage, FlatLayItem } from "@/components/FlatLayCollage";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
-const PEEK_START = 18;
-const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.28;
-const SWIPE_VERTICAL_THRESHOLD = 110;
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+const SWIPE_UP_THRESHOLD = 96;
+const DOUBLE_TAP_MS = 280;
 
 interface OutfitCardProps {
   garments: { garment: Garment; slot: string }[];
   score: number | null;
+  saved?: boolean;
+  saving?: boolean;
   onLike: () => void;
+  onPass: () => void;
   onDislike: () => void;
-  onSkip: () => void;
-  onSave: () => void | Promise<void>;
+  onSave: () => void;
   onItemTap: (item: FlatLayItem) => void;
 }
 
 export function OutfitCard({
   garments,
   score,
+  saved = false,
+  saving = false,
   onLike,
+  onPass,
   onDislike,
-  onSkip,
   onSave,
   onItemTap,
 }: OutfitCardProps) {
   const pan = useRef(new Animated.ValueXY()).current;
+  const heart = useRef(new Animated.Value(0)).current;
   const lastTap = useRef(0);
+  const pendingItemTap = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onLikeRef = useRef(onLike);
-  const onDislikeRef = useRef(onDislike);
-  const onSkipRef = useRef(onSkip);
-  const onSaveRef = useRef(onSave);
+  const onPassRef = useRef(onPass);
+  const onItemTapRef = useRef(onItemTap);
   onLikeRef.current = onLike;
-  onDislikeRef.current = onDislike;
-  onSkipRef.current = onSkip;
-  onSaveRef.current = onSave;
+  onPassRef.current = onPass;
+  onItemTapRef.current = onItemTap;
 
-  const flyOff = (
-    toValue: { x: number; y: number },
-    onDone: () => void
-  ) => {
+  const popHeart = () => {
+    heart.setValue(0);
+    Animated.sequence([
+      Animated.spring(heart, {
+        toValue: 1,
+        friction: 5,
+        useNativeDriver: true,
+      }),
+      Animated.delay(280),
+      Animated.timing(heart, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const like = () => {
+    popHeart();
+    onLikeRef.current();
+  };
+
+  const flyUp = (onDone: () => void) => {
     Animated.timing(pan, {
-      toValue,
-      duration: 220,
+      toValue: { x: 0, y: -SCREEN_HEIGHT },
+      duration: 240,
       useNativeDriver: false,
     }).start(({ finished }) => {
       if (finished) onDone();
@@ -62,7 +85,7 @@ export function OutfitCard({
   const springBack = () => {
     Animated.spring(pan, {
       toValue: { x: 0, y: 0 },
-      friction: 6,
+      friction: 7,
       useNativeDriver: false,
     }).start();
   };
@@ -70,233 +93,136 @@ export function OutfitCard({
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gs) =>
-        Math.abs(gs.dx) > 8 || Math.abs(gs.dy) > 8,
-      onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], {
-        useNativeDriver: false,
-      }),
+        Math.abs(gs.dy) > 8 && Math.abs(gs.dy) > Math.abs(gs.dx),
+      onPanResponderMove: (_, gs) => {
+        const dy = gs.dy < 0 ? gs.dy : gs.dy * 0.22;
+        pan.setValue({ x: 0, y: dy });
+      },
       onPanResponderRelease: (_, gs) => {
-        const absX = Math.abs(gs.dx);
-        const absY = Math.abs(gs.dy);
-        const vertical = absY > absX;
-
-        if (vertical && gs.dy < -SWIPE_VERTICAL_THRESHOLD) {
-          flyOff({ x: 0, y: -SCREEN_HEIGHT }, () => {
-            void Promise.resolve(onSaveRef.current()).catch(() => {
-              springBack();
-            });
-          });
-        } else if (vertical && gs.dy > SWIPE_VERTICAL_THRESHOLD) {
-          flyOff({ x: 0, y: SCREEN_HEIGHT }, () => onSkipRef.current());
-        } else if (gs.dx < -SWIPE_THRESHOLD) {
-          flyOff({ x: -SCREEN_WIDTH, y: gs.dy }, () => onLikeRef.current());
-        } else if (gs.dx > SWIPE_THRESHOLD) {
-          flyOff({ x: SCREEN_WIDTH, y: gs.dy }, () => onDislikeRef.current());
+        if (gs.dy < -SWIPE_UP_THRESHOLD || gs.vy < -1.05) {
+          flyUp(() => onPassRef.current());
         } else {
           springBack();
         }
       },
+      onPanResponderTerminate: springBack,
     })
   ).current;
 
-  const handleDoubleTap = () => {
+  const registerTap = () => {
     const now = Date.now();
-    if (now - lastTap.current < 300) {
-      flyOff({ x: -SCREEN_WIDTH, y: 0 }, () => onLikeRef.current());
-    }
+    const isDouble = now - lastTap.current < DOUBLE_TAP_MS;
     lastTap.current = now;
+    if (isDouble && pendingItemTap.current) {
+      clearTimeout(pendingItemTap.current);
+      pendingItemTap.current = null;
+    }
+    return isDouble;
   };
 
-  const rotate = pan.x.interpolate({
-    inputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH],
-    outputRange: ["-8deg", "0deg", "8deg"],
-  });
+  const handleCardPress = () => {
+    if (registerTap()) like();
+  };
 
-  const likePeek = pan.x.interpolate({
-    inputRange: [-SWIPE_THRESHOLD, -PEEK_START, 0],
-    outputRange: [1, 0.7, 0.22],
-    extrapolate: "clamp",
-  });
-  const dislikePeek = pan.x.interpolate({
-    inputRange: [0, PEEK_START, SWIPE_THRESHOLD],
-    outputRange: [0.22, 0.7, 1],
-    extrapolate: "clamp",
-  });
-  const savePeek = pan.y.interpolate({
-    inputRange: [-SWIPE_VERTICAL_THRESHOLD, -PEEK_START, 0],
-    outputRange: [1, 0.7, 0.22],
-    extrapolate: "clamp",
-  });
-  const skipPeek = pan.y.interpolate({
-    inputRange: [0, PEEK_START, SWIPE_VERTICAL_THRESHOLD],
-    outputRange: [0.22, 0.7, 1],
-    extrapolate: "clamp",
-  });
-  const likeStamp = pan.x.interpolate({
-    inputRange: [-SWIPE_THRESHOLD, -PEEK_START, 0],
-    outputRange: [1, 0.85, 0],
-    extrapolate: "clamp",
-  });
-  const dislikeStamp = pan.x.interpolate({
-    inputRange: [0, PEEK_START, SWIPE_THRESHOLD],
-    outputRange: [0, 0.85, 1],
-    extrapolate: "clamp",
-  });
-  const saveStamp = pan.y.interpolate({
-    inputRange: [-SWIPE_VERTICAL_THRESHOLD, -PEEK_START, 0],
-    outputRange: [1, 0.85, 0],
-    extrapolate: "clamp",
-  });
-  const likeScale = pan.x.interpolate({
-    inputRange: [-SWIPE_THRESHOLD, 0],
-    outputRange: [1.08, 0.86],
-    extrapolate: "clamp",
-  });
-  const dislikeScale = pan.x.interpolate({
-    inputRange: [0, SWIPE_THRESHOLD],
-    outputRange: [0.86, 1.08],
-    extrapolate: "clamp",
-  });
-  const saveScale = pan.y.interpolate({
-    inputRange: [-SWIPE_VERTICAL_THRESHOLD, 0],
-    outputRange: [1.08, 0.86],
-    extrapolate: "clamp",
+  const handleItemPress = (item: FlatLayItem) => {
+    if (registerTap()) {
+      like();
+      return;
+    }
+    if (pendingItemTap.current) clearTimeout(pendingItemTap.current);
+    pendingItemTap.current = setTimeout(() => {
+      pendingItemTap.current = null;
+      onItemTapRef.current(item);
+    }, DOUBLE_TAP_MS);
+  };
+
+  const heartScale = heart.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.4, 1],
   });
 
   return (
-    <View className="mx-2">
-      <View
-        pointerEvents="none"
-        className="absolute inset-y-0 left-0 right-0 items-center justify-center"
-      >
-        <Animated.View
-          accessibilityElementsHidden
-          importantForAccessibility="no"
-          style={{
-            position: "absolute",
-            top: 8,
-            opacity: savePeek,
-            transform: [{ scale: saveScale }],
-          }}
-        >
-          <View className="h-16 w-16 items-center justify-center rounded-full bg-clover-600">
-            <Ionicons name="add" size={36} color="#ffffff" />
-          </View>
-        </Animated.View>
-        <Animated.View
-          accessibilityElementsHidden
-          importantForAccessibility="no"
-          style={{
-            position: "absolute",
-            left: 2,
-            opacity: likePeek,
-            transform: [{ scale: likeScale }],
-          }}
-        >
-          <View className="h-16 w-16 items-center justify-center rounded-full bg-clover-600">
-            <Ionicons name="checkmark" size={36} color="#ffffff" />
-          </View>
-        </Animated.View>
-        <Animated.View
-          accessibilityElementsHidden
-          importantForAccessibility="no"
-          style={{
-            position: "absolute",
-            right: 2,
-            opacity: dislikePeek,
-            transform: [{ scale: dislikeScale }],
-          }}
-        >
-          <View className="h-16 w-16 items-center justify-center rounded-full bg-red-500">
-            <Ionicons name="close" size={36} color="#ffffff" />
-          </View>
-        </Animated.View>
-        <Animated.View
-          accessibilityElementsHidden
-          importantForAccessibility="no"
-          style={{
-            position: "absolute",
-            bottom: 8,
-            opacity: skipPeek,
-            transform: [{ scale: skipPeek }],
-          }}
-        >
-          <View className="h-14 w-14 items-center justify-center rounded-full bg-stone-400">
-            <Ionicons name="arrow-down" size={28} color="#ffffff" />
-          </View>
-        </Animated.View>
-      </View>
-
+    <View className="flex-1">
       <Animated.View
         {...panResponder.panHandlers}
-        style={{
-          transform: [{ translateX: pan.x }, { translateY: pan.y }, { rotate }],
-        }}
-        className="mx-3 overflow-hidden rounded-2xl bg-white shadow-lg"
+        style={{ flex: 1, transform: [{ translateY: pan.y }] }}
+        className="overflow-hidden bg-clover-50"
       >
-        <TouchableWithoutFeedback onPress={handleDoubleTap}>
-          <View className="p-4">
-            <Animated.View
-              pointerEvents="none"
-              style={{
-                position: "absolute",
-                alignSelf: "center",
-                top: 18,
-                zIndex: 20,
-                opacity: saveStamp,
-                transform: [{ scale: saveScale }],
-              }}
+        <View className="flex-1 justify-center px-3 pb-6 pt-1">
+          <View className="mb-2 flex-row items-center justify-end gap-2">
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Not for me"
+              onPress={onDislike}
+              className="min-h-11 flex-row items-center rounded-full bg-white px-4"
+              style={{ borderWidth: 1, borderColor: "#E7E5E4" }}
             >
-              <View className="h-11 w-11 items-center justify-center rounded-full border-2 border-clover-600 bg-white/95">
-                <Ionicons name="add" size={26} color="#173F32" />
-              </View>
-            </Animated.View>
-            <Animated.View
-              pointerEvents="none"
-              style={{
-                position: "absolute",
-                left: 16,
-                top: 18,
-                zIndex: 20,
-                opacity: likeStamp,
-                transform: [{ rotate: "-12deg" }, { scale: likeScale }],
-              }}
+              <Ionicons name="close" size={18} color="#57534e" />
+              <Text className="ml-1.5 text-sm font-bold text-stone-600">
+                Not for me
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={
+                saved ? "Outfit saved to closet" : "Save outfit to closet"
+              }
+              disabled={saving || saved}
+              onPress={onSave}
+              className={`min-h-11 flex-row items-center rounded-full px-4 ${
+                saved ? "bg-clover-100" : "bg-clover-600"
+              }`}
             >
-              <View className="h-11 w-11 items-center justify-center rounded-full border-2 border-clover-600 bg-white/95">
-                <Ionicons name="checkmark" size={22} color="#173F32" />
-              </View>
-            </Animated.View>
-            <Animated.View
-              pointerEvents="none"
-              style={{
-                position: "absolute",
-                right: 16,
-                top: 18,
-                zIndex: 20,
-                opacity: dislikeStamp,
-                transform: [{ rotate: "12deg" }, { scale: dislikeScale }],
-              }}
-            >
-              <View className="h-11 w-11 items-center justify-center rounded-full border-2 border-red-500 bg-white/95">
-                <Ionicons name="close" size={22} color="#ef4444" />
-              </View>
-            </Animated.View>
-
+              {saving ? (
+                <ActivityIndicator color={saved ? "#12372A" : "#ffffff"} />
+              ) : (
+                <MaterialCommunityIcons
+                  name="hanger"
+                  size={22}
+                  color={saved ? "#12372A" : "#ffffff"}
+                />
+              )}
+              <Text
+                className={`ml-2 text-sm font-bold ${
+                  saved ? "text-clover-800" : "text-white"
+                }`}
+              >
+                {saved ? "Saved" : "Save"}
+              </Text>
+            </Pressable>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Double tap to like this outfit"
+            onPress={handleCardPress}
+          >
             <FlatLayCollage
               items={garments}
+              showLabels={false}
               onGarmentPress={() => {}}
-              onItemPress={onItemTap}
+              onItemPress={handleItemPress}
               accessibilityLabel="Recommended outfit flat lay"
             />
+          </Pressable>
+          {score !== null && score > 0 && (
+            <View className="mt-3 items-center">
+              <Text className="text-xs text-gray-400">
+                Style match: {Math.round(score * 100)}%
+              </Text>
+            </View>
+          )}
+        </View>
+      </Animated.View>
 
-            {score !== null && score > 0 && (
-              <View className="mt-3 items-center">
-                <Text className="text-xs text-gray-400">
-                  Style match: {Math.round(score * 100)}%
-                </Text>
-              </View>
-            )}
-          </View>
-        </TouchableWithoutFeedback>
+      <Animated.View
+        pointerEvents="none"
+        className="absolute inset-0 items-center justify-center"
+        style={{
+          opacity: heart,
+          transform: [{ scale: heartScale }],
+        }}
+      >
+        <Ionicons name="heart" size={92} color="#ff2d55" />
       </Animated.View>
     </View>
   );
