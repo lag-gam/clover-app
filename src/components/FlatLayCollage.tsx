@@ -1,5 +1,6 @@
 import { Image, Pressable, Text, View } from "react-native";
 import { Garment, GarmentDisplaySide } from "@/types/database";
+import { resolveGarmentImage } from "@/utils/outfit-state";
 
 export type FlatLayItem = {
   garment: Garment;
@@ -8,10 +9,7 @@ export type FlatLayItem = {
 };
 
 export function garmentImageForSide(item: FlatLayItem): string {
-  if (item.display_side === "back" && item.garment.back_image_url) {
-    return item.garment.back_cutout_url ?? item.garment.back_image_url;
-  }
-  return item.garment.cutout_url ?? item.garment.image_url;
+  return resolveGarmentImage(item.garment, item.display_side ?? "front");
 }
 
 type Percent = `${number}%`;

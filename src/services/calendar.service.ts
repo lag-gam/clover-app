@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { OutfitSchedule, OutfitWithItems } from "@/types/database";
+import { filterSaved } from "@/utils/outfit-state";
 
 const OUTFIT_WITH_ITEMS =
   "*, items:outfit_items(*, garment:garments(*))";
@@ -17,7 +18,7 @@ export async function fetchSavedOutfits(
     .order("created_at", { ascending: false });
 
   if (error) throw new Error(`Fetch outfits error: ${error.message}`);
-  return (data ?? []) as unknown as OutfitWithItems[];
+  return filterSaved((data ?? []) as unknown as OutfitWithItems[]);
 }
 
 export async function fetchOutfitSchedule(

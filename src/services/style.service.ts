@@ -25,7 +25,9 @@ export async function computeStyleProfile(
   const [{ data: interactions, error }, { data: existing }] = await Promise.all([
     supabase
       .from("interactions")
-      .select("interaction_type, outfit:outfits(embedding)")
+      .select(
+        "interaction_type, outfit:outfits(embedding), swapped:garments!interactions_swapped_garment_id_fkey(embedding), replacement:garments!interactions_replacement_garment_id_fkey(embedding)"
+      )
       .eq("user_id", userId)
       .in("interaction_type", [
         "worn",
@@ -34,6 +36,7 @@ export async function computeStyleProfile(
         "liked",
         "disliked",
         "skipped",
+        "item_swapped",
       ]),
     supabase
       .from("style_profiles")
@@ -48,6 +51,24 @@ export async function computeStyleProfile(
   const weights: number[] = [];
 
   for (const interaction of interactions ?? []) {
+    if (interaction.interaction_type === "item_swapped") {
+      const swapped = interaction.swapped as unknown as {
+        embedding: number[] | null;
+      } | null;
+      const replacement = interaction.replacement as unknown as {
+        embedding: number[] | null;
+      } | null;
+      if (replacement?.embedding) {
+        vectors.push(replacement.embedding);
+        weights.push(1);
+      }
+      if (swapped?.embedding) {
+        vectors.push(swapped.embedding);
+        weights.push(-1);
+      }
+      continue;
+    }
+
     const outfit = interaction.outfit as unknown as {
       embedding: number[] | null;
     };

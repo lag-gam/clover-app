@@ -14,6 +14,7 @@ import {
   saveOutfit,
   getAlternatives,
   OutfitCandidate,
+  swapPersistedOutfitItem,
 } from "@/services/outfit.service";
 import { logInteraction } from "@/services/interaction.service";
 import { OutfitCard } from "@/components/OutfitCard";
@@ -26,6 +27,8 @@ import { SagModeToggle } from "@/components/SagModeToggle";
 import { useStyleProfile } from "@/hooks/useStyleProfile";
 import { Garment } from "@/types/database";
 import { Ionicons } from "@expo/vector-icons";
+import { replaceDisplayedItem } from "@/utils/outfit-state";
+import { averageVectors } from "@/utils/math";
 
 interface DisplayOutfit extends OutfitCandidate {
   savedId?: string;
@@ -92,9 +95,18 @@ export default function HomeScreen() {
       // Save all as outfits in DB and log "shown"
       const saved: DisplayOutfit[] = [];
       for (const candidate of candidates) {
-        const outfit = await saveOutfit(user.id, candidate);
-        await logInteraction(user.id, outfit.id, "shown");
-        saved.push({ ...candidate, savedId: outfit.id });
+        const result = await saveOutfit(user.id, candidate);
+        await logInteraction(user.id, result.outfit.id, "shown");
+        saved.push({
+          ...candidate,
+          garments: candidate.garments.map((item) => ({
+            ...item,
+            outfit_item_id: result.items.find(
+              (savedItem) => savedItem.garment_id === item.garment.id
+            )?.id,
+          })),
+          savedId: result.outfit.id,
+        });
       }
 
       setOutfits(saved);
@@ -141,28 +153,53 @@ export default function HomeScreen() {
     const current = outfits[currentIndex];
     if (!current || !swapTarget || !user) return;
 
-    // Log swap interaction
     if (current.savedId) {
-      await logInteraction(
-        user.id,
-        current.savedId,
-        "item_swapped",
-        swapTarget.id,
-        replacement.id
+      const targetItem = current.garments.find(
+        (item) => item.garment.id === swapTarget.id
       );
+      if (!targetItem?.outfit_item_id) {
+        Alert.alert("Could not swap item", "The saved outfit item was not found.");
+        return;
+      }
+      try {
+        await swapPersistedOutfitItem(
+          current.savedId,
+          targetItem.outfit_item_id,
+          replacement.id
+        );
+        await logInteraction(
+          user.id,
+          current.savedId,
+          "item_swapped",
+          swapTarget.id,
+          replacement.id
+        );
+        maybeRecalculate();
+      } catch (error) {
+        Alert.alert(
+          "Could not swap item",
+          error instanceof Error ? error.message : "Please try again."
+        );
+        return;
+      }
     }
 
     // Update the current outfit in state
-    const updatedGarments = current.garments.map((item) =>
-      item.garment.id === swapTarget.id
-        ? { ...item, garment: replacement, display_side: "front" as const }
-        : item
+    const updatedGarments = replaceDisplayedItem(
+      current.garments,
+      swapTarget.id,
+      replacement
     );
 
     const updatedOutfits = [...outfits];
+    const embeddings = updatedGarments
+      .map(({ garment }) => garment.embedding)
+      .filter((embedding): embedding is number[] => embedding !== null);
     updatedOutfits[currentIndex] = {
       ...current,
       garments: updatedGarments,
+      embedding: embeddings.length > 0 ? averageVectors(embeddings) : [],
+      score: 0,
     };
     setOutfits(updatedOutfits);
 
@@ -200,7 +237,7 @@ export default function HomeScreen() {
     setSavingOutfit(true);
     try {
       const saved = await saveOutfit(user.id, current, true);
-      await logInteraction(user.id, saved.id, "selected");
+      await logInteraction(user.id, saved.outfit.id, "selected");
       setSavedIndexes((indexes) => new Set(indexes).add(currentIndex));
       Alert.alert("Outfit saved", "Your edited outfit is ready for the calendar.");
       maybeRecalculate();

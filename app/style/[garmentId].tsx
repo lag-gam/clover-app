@@ -31,7 +31,11 @@ export default function SeededStyleScreen() {
   const { garmentId } = useLocalSearchParams<{ garmentId: string }>();
   const router = useRouter();
   const { user } = useAuth();
-  const { profile, loading: profileLoading } = useStyleProfile();
+  const {
+    profile,
+    loading: profileLoading,
+    maybeRecalculate,
+  } = useStyleProfile();
   const [garment, setGarment] = useState<Garment | null>(null);
   const [closet, setCloset] = useState<Garment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -197,7 +201,8 @@ export default function SeededStyleScreen() {
     setSavingIndex(index);
     try {
       const saved = await saveOutfit(user.id, looks[index], true);
-      await logInteraction(user.id, saved.id, "selected");
+      await logInteraction(user.id, saved.outfit.id, "selected");
+      maybeRecalculate();
       setSavedIndexes((current) => new Set(current).add(index));
       Alert.alert("Look saved", "Your edited look is ready for the calendar.");
     } catch (saveError) {

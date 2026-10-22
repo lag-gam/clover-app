@@ -12,6 +12,7 @@ export interface OutfitCandidate {
     garment: Garment;
     slot: string;
     display_side?: GarmentDisplaySide;
+    outfit_item_id?: string;
   }[];
   embedding: number[];
   score: number;
@@ -319,13 +320,18 @@ export async function saveOutfit(
   userId: string,
   candidate: OutfitCandidate,
   isSaved = false
-): Promise<Outfit> {
+): Promise<{ outfit: Outfit; items: OutfitItem[] }> {
   const { supabase } = await import("@/lib/supabase");
+  const currentEmbeddings = candidate.garments
+    .map(({ garment }) => garment.embedding)
+    .filter((embedding): embedding is number[] => embedding !== null);
+  const currentEmbedding =
+    currentEmbeddings.length > 0 ? averageVectors(currentEmbeddings) : [];
   const { data: outfit, error: outfitError } = await supabase
     .from("outfits")
     .insert({
       user_id: userId,
-      embedding: candidate.embedding.length > 0 ? candidate.embedding : null,
+      embedding: currentEmbedding.length > 0 ? currentEmbedding : null,
       score: candidate.score,
       is_saved: isSaved,
     })
@@ -341,14 +347,18 @@ export async function saveOutfit(
     display_side: item.display_side ?? "front",
   }));
 
-  const { error: itemsError } = await supabase
+  const { data: savedItems, error: itemsError } = await supabase
     .from("outfit_items")
-    .insert(outfitItems);
+    .insert(outfitItems)
+    .select();
 
   if (itemsError)
     throw new Error(`Save outfit items error: ${itemsError.message}`);
 
-  return outfit as Outfit;
+  return {
+    outfit: outfit as Outfit,
+    items: (savedItems ?? []) as OutfitItem[],
+  };
 }
 
 export async function saveManualOutfit(
@@ -452,6 +462,23 @@ export async function updateOutfitItemSide(
     .update({ display_side: displaySide })
     .eq("id", itemId);
   if (error) throw new Error(`Turn item error: ${error.message}`);
+}
+
+export async function swapPersistedOutfitItem(
+  outfitId: string,
+  outfitItemId: string,
+  replacementGarmentId: string
+): Promise<OutfitItem> {
+  const { supabase } = await import("@/lib/supabase");
+  const { data, error } = await supabase.rpc("swap_outfit_item", {
+    p_outfit_id: outfitId,
+    p_outfit_item_id: outfitItemId,
+    p_replacement_garment_id: replacementGarmentId,
+  });
+  if (error) throw new Error(`Swap item error: ${error.message}`);
+  const item = data?.[0];
+  if (!item) throw new Error("Swap item did not return an updated item.");
+  return item as OutfitItem;
 }
 
 export function getAlternatives(

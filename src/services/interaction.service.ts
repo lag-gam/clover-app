@@ -47,6 +47,7 @@ export async function getInteractionCount(userId: string): Promise<number> {
       "worn",
       "repeated",
       "skipped",
+      "item_swapped",
     ]);
 
   if (error) return 0;

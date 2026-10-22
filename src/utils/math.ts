@@ -40,12 +40,28 @@ export function weightedAverageVectors(
   weights: number[]
 ): number[] {
   if (vectors.length === 0) return [];
-  const dim = vectors[0].length;
+  const firstValid = vectors.find(
+    (vector, index) =>
+      vector.length > 0 &&
+      vector.every(Number.isFinite) &&
+      Number.isFinite(weights[index]) &&
+      weights[index] !== 0
+  );
+  if (!firstValid) return [];
+  const dim = firstValid.length;
   const result = new Array(dim).fill(0);
   let totalWeight = 0;
 
   for (let j = 0; j < vectors.length; j++) {
     const w = weights[j];
+    if (
+      !Number.isFinite(w) ||
+      w === 0 ||
+      vectors[j].length !== dim ||
+      !vectors[j].every(Number.isFinite)
+    ) {
+      continue;
+    }
     totalWeight += Math.abs(w);
     for (let i = 0; i < dim; i++) {
       result[i] += vectors[j][i] * w;
