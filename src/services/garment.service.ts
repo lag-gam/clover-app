@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { compressImage, getImageBlob } from "@/utils/image";
+import { runBoundedBatch } from "@/utils/bounded-batch";
 import {
   Formality,
   Garment,
@@ -16,6 +17,26 @@ export type IngestionStep =
   | "compressing"
   | "uploading_original"
   | "saving";
+
+export type BatchGarmentProgress = {
+  completed: number;
+  total: number;
+  succeeded: number;
+  failed: number;
+  currentIndex?: number;
+  currentStep?: IngestionStep;
+};
+
+export type BatchGarmentFailure = {
+  index: number;
+  imageUri: string;
+  error: Error;
+};
+
+export type BatchGarmentResult = {
+  garments: Garment[];
+  failures: BatchGarmentFailure[];
+};
 
 export type GarmentMetadataInput = {
   name: string;
@@ -115,6 +136,71 @@ export async function createPendingGarment(
 
   queueGarmentProcessing(data.id);
   return data as Garment;
+}
+
+export async function createPendingGarments(
+  imageUris: readonly string[],
+  userId: string,
+  onProgress?: (progress: BatchGarmentProgress) => void,
+  concurrency = 3
+): Promise<BatchGarmentResult> {
+  let completed = 0;
+  let succeeded = 0;
+  let failed = 0;
+
+  const report = (
+    currentIndex?: number,
+    currentStep?: IngestionStep
+  ): void => {
+    try {
+      onProgress?.({
+        completed,
+        total: imageUris.length,
+        succeeded,
+        failed,
+        currentIndex,
+        currentStep,
+      });
+    } catch {
+      // Progress rendering must not interrupt an upload after it has started.
+    }
+  };
+
+  report();
+  const results = await runBoundedBatch(
+    imageUris,
+    (imageUri, index) =>
+      createPendingGarment(imageUri, userId, (step) => report(index, step)),
+    concurrency,
+    (result) => {
+      completed += 1;
+      if (result.status === "fulfilled") {
+        succeeded += 1;
+      } else {
+        failed += 1;
+      }
+      report();
+    }
+  );
+
+  const garments: Garment[] = [];
+  const failures: BatchGarmentFailure[] = [];
+  for (const result of results) {
+    if (result.status === "fulfilled") {
+      garments.push(result.value);
+    } else {
+      failures.push({
+        index: result.index,
+        imageUri: imageUris[result.index],
+        error:
+          result.reason instanceof Error
+            ? result.reason
+            : new Error("Could not save garment"),
+      });
+    }
+  }
+
+  return { garments, failures };
 }
 
 export function queueGarmentProcessing(garmentId: string): void {

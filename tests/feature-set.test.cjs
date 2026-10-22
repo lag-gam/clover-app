@@ -11,6 +11,9 @@ const {
 const {
   weightedAverageVectors,
 } = require("../.feature-test-build/utils/math.js");
+const {
+  runBoundedBatch,
+} = require("../.feature-test-build/utils/bounded-batch.js");
 
 const garment = {
   image_url: "front-original",
@@ -74,6 +77,40 @@ test("signed preference evidence is finite and directional", () => {
     weightedAverageVectors([[1, 2], [Number.NaN, 4]], [1, -1]),
     [1, 2]
   );
+});
+
+test("bounded batch limits concurrency and preserves partial successes", async () => {
+  let active = 0;
+  let maximumActive = 0;
+  const calls = [];
+  const progress = [];
+
+  const results = await runBoundedBatch(
+    ["a", "b", "c", "d", "e"],
+    async (item, index) => {
+      calls.push(index);
+      active += 1;
+      maximumActive = Math.max(maximumActive, active);
+      await new Promise((resolve) => setImmediate(resolve));
+      active -= 1;
+      if (index === 2) throw new Error("expected failure");
+      return item.toUpperCase();
+    },
+    3,
+    (result) => {
+      progress.push(result.status);
+    }
+  );
+
+  assert.equal(maximumActive, 3);
+  assert.deepEqual(calls.sort((a, b) => a - b), [0, 1, 2, 3, 4]);
+  assert.deepEqual(
+    results.map((result) => result.status),
+    ["fulfilled", "fulfilled", "rejected", "fulfilled", "fulfilled"]
+  );
+  assert.equal(progress.length, 5);
+  assert.equal(progress.filter((status) => status === "fulfilled").length, 4);
+  assert.equal(progress.filter((status) => status === "rejected").length, 1);
 });
 
 test("durable swap RPC enforces authenticated ownership", () => {
