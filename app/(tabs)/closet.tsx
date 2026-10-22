@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -11,20 +11,28 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { GarmentCard } from "@/components/GarmentCard";
 import { CategoryFilter } from "@/components/CategoryFilter";
+import { LaundryBasket } from "@/components/LaundryBasket";
+import { SavedOutfitsList } from "@/components/SavedOutfitsList";
 import { SpatialCloset } from "@/components/SpatialCloset";
 import { Ionicons } from "@expo/vector-icons";
+import { fetchSavedOutfits } from "@/services/calendar.service";
 import { retryGarmentProcessing } from "@/services/garment.service";
+import { deleteOutfit } from "@/services/outfit.service";
+import { fetchLaundryItems, washGarments } from "@/services/laundry.service";
+import { LaundryItem } from "@/utils/laundry";
+import { useAuth } from "@/hooks/useAuth";
 import { useCloset } from "@/hooks/useCloset";
 import {
   ClosetSection,
   ClosetSectionKind,
   GarmentCategory,
+  OutfitWithItems,
 } from "@/types/database";
 
-type ClosetView = "spatial" | "grid";
+type ClosetView = "spatial" | "grid" | "outfits" | "laundry";
 
 type SectionEditor = {
   visible: boolean;
@@ -35,6 +43,8 @@ type SectionEditor = {
 
 export default function ClosetScreen() {
   const router = useRouter();
+  const { view: viewParam } = useLocalSearchParams<{ view?: string }>();
+  const { user } = useAuth();
   const {
     sections,
     garments,
@@ -47,7 +57,18 @@ export default function ClosetScreen() {
     reorderSections,
     moveGarment,
   } = useCloset();
-  const [view, setView] = useState<ClosetView>("spatial");
+  const [view, setView] = useState<ClosetView>(
+    viewParam === "outfits" ||
+      viewParam === "grid" ||
+      viewParam === "laundry"
+      ? viewParam
+      : "spatial"
+  );
+  const [savedOutfits, setSavedOutfits] = useState<OutfitWithItems[]>([]);
+  const [outfitsLoading, setOutfitsLoading] = useState(false);
+  const [laundry, setLaundry] = useState<LaundryItem[]>([]);
+  const [laundryLoading, setLaundryLoading] = useState(false);
+  const [washing, setWashing] = useState(false);
   const [editing, setEditing] = useState(false);
   const [category, setCategory] = useState<GarmentCategory | null>(null);
   const [savingSection, setSavingSection] = useState(false);
@@ -58,6 +79,91 @@ export default function ClosetScreen() {
     kind: "rail",
   });
 
+  useEffect(() => {
+    if (
+      viewParam === "outfits" ||
+      viewParam === "grid" ||
+      viewParam === "spatial" ||
+      viewParam === "laundry"
+    ) {
+      setView(viewParam);
+    }
+  }, [viewParam]);
+
+  const loadSavedOutfits = useCallback(async () => {
+    if (!user) return;
+    setOutfitsLoading(true);
+    try {
+      setSavedOutfits(await fetchSavedOutfits(user.id));
+    } catch (loadError) {
+      Alert.alert(
+        "Could not load outfits",
+        loadError instanceof Error ? loadError.message : "Please try again."
+      );
+    } finally {
+      setOutfitsLoading(false);
+    }
+  }, [user]);
+
+  const loadLaundry = useCallback(async () => {
+    if (!user) return;
+    setLaundryLoading(true);
+    try {
+      setLaundry(await fetchLaundryItems(user.id));
+    } catch (loadError) {
+      Alert.alert(
+        "Could not load laundry",
+        loadError instanceof Error ? loadError.message : "Please try again."
+      );
+    } finally {
+      setLaundryLoading(false);
+    }
+  }, [user]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadLaundry();
+      if (view === "outfits") void loadSavedOutfits();
+    }, [loadLaundry, loadSavedOutfits, view])
+  );
+
+  const handleWash = useCallback(
+    async (garmentIds: string[]) => {
+      if (!user || garmentIds.length === 0) return;
+      setWashing(true);
+      try {
+        await washGarments(user.id, garmentIds);
+        setLaundry((current) =>
+          current.filter((item) => !garmentIds.includes(item.garment.id))
+        );
+      } catch (washError) {
+        Alert.alert(
+          "Could not empty laundry",
+          washError instanceof Error ? washError.message : "Please try again."
+        );
+      } finally {
+        setWashing(false);
+      }
+    },
+    [user]
+  );
+
+  const handleDeleteOutfit = useCallback(async (outfitId: string) => {
+    try {
+      await deleteOutfit(outfitId);
+      setSavedOutfits((current) =>
+        current.filter((item) => item.id !== outfitId)
+      );
+    } catch (deleteError) {
+      Alert.alert(
+        "Could not delete outfit",
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Please try again."
+      );
+    }
+  }, []);
+
   const filteredGarments = useMemo(
     () =>
       category
@@ -66,7 +172,7 @@ export default function ClosetScreen() {
     [category, garments]
   );
 
-  const handleRetry = async (garmentId: string) => {
+  const handleRetry = useCallback(async (garmentId: string) => {
     try {
       await retryGarmentProcessing(garmentId);
       await refresh();
@@ -76,7 +182,7 @@ export default function ClosetScreen() {
         error instanceof Error ? error.message : "Could not retry analysis"
       );
     }
-  };
+  }, [refresh]);
 
   const openCreateSection = () => {
     setSectionEditor({
@@ -161,7 +267,12 @@ export default function ClosetScreen() {
     }
   };
 
-  if (loading && sections.length === 0) {
+  if (
+    loading &&
+    sections.length === 0 &&
+    view !== "outfits" &&
+    view !== "laundry"
+  ) {
     return (
       <View className="flex-1 items-center justify-center bg-clover-50">
         <ActivityIndicator size="large" color="#173F32" />
@@ -175,90 +286,101 @@ export default function ClosetScreen() {
   return (
     <View className="flex-1 bg-clover-50">
       <View className="border-b border-clover-200 bg-[#FCFBF7] px-4 pb-3 pt-2">
-        <View className="flex-row items-center justify-between">
-          <View className="flex-row rounded-xl bg-stone-100 p-1">
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityState={{ selected: view === "spatial" }}
-              onPress={() => setView("spatial")}
-              className={`flex-row items-center rounded-lg px-3 py-2 ${
-                view === "spatial" ? "bg-white" : ""
-              }`}
-            >
-              <Ionicons
-                name="file-tray-stacked-outline"
-                size={16}
-                color={view === "spatial" ? "#12372A" : "#77827B"}
-              />
-              <Text
-                className={`ml-1.5 text-xs font-semibold ${
-                  view === "spatial" ? "text-clover-700" : "text-stone-500"
+        <View className="flex-row rounded-xl bg-stone-100 p-1">
+          {(
+            [
+              {
+                id: "spatial",
+                label: "Closet",
+                icon: "file-tray-stacked-outline",
+              },
+              { id: "grid", label: "Grid", icon: "grid-outline" },
+              { id: "outfits", label: "Outfits", icon: "layers-outline" },
+              { id: "laundry", label: "Laundry", icon: "basket-outline" },
+            ] as const
+          ).map((tab) => {
+            const selected = view === tab.id;
+            return (
+              <TouchableOpacity
+                key={tab.id}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  tab.id === "laundry" && laundry.length > 0
+                    ? `Laundry, ${laundry.length} items`
+                    : tab.label
+                }
+                accessibilityState={{ selected }}
+                onPress={() => setView(tab.id)}
+                className={`flex-1 items-center justify-center rounded-lg py-2 ${
+                  selected ? "bg-white" : ""
                 }`}
               >
-                Closet
-              </Text>
-            </TouchableOpacity>
+                <View className="flex-row items-center">
+                  <Ionicons
+                    name={tab.icon}
+                    size={16}
+                    color={selected ? "#12372A" : "#77827B"}
+                  />
+                  {tab.id === "laundry" && laundry.length > 0 ? (
+                    <View className="ml-1 min-w-[16px] items-center rounded-full bg-clover-600 px-1">
+                      <Text className="text-[10px] font-bold text-white">
+                        {laundry.length > 99 ? "99+" : laundry.length}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+                <Text
+                  numberOfLines={1}
+                  className={`mt-0.5 text-[10px] font-semibold ${
+                    selected ? "text-clover-700" : "text-stone-500"
+                  }`}
+                >
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {view === "spatial" && (
+          <View className="mt-3 flex-row items-center justify-end">
+            {editing && (
+              <TouchableOpacity
+                onPress={openCreateSection}
+                className="mr-2 h-11 w-11 items-center justify-center rounded-xl bg-clover-100"
+                accessibilityLabel="Add closet section"
+              >
+                <Ionicons name="add" size={21} color="#12372A" />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityState={{ selected: view === "grid" }}
-              onPress={() => setView("grid")}
-              className={`flex-row items-center rounded-lg px-3 py-2 ${
-                view === "grid" ? "bg-white" : ""
+              onPress={() => setEditing((current) => !current)}
+              className={`rounded-xl px-3 py-2 ${
+                editing ? "bg-clover-600" : "bg-stone-100"
               }`}
             >
-              <Ionicons
-                name="grid-outline"
-                size={16}
-                color={view === "grid" ? "#12372A" : "#77827B"}
-              />
               <Text
-                className={`ml-1.5 text-xs font-semibold ${
-                  view === "grid" ? "text-clover-700" : "text-stone-500"
+                className={`text-xs font-semibold ${
+                  editing ? "text-white" : "text-stone-600"
                 }`}
               >
-                Grid
+                {editing ? "Done" : "Edit sections"}
               </Text>
             </TouchableOpacity>
           </View>
-
-          {view === "spatial" && (
-            <View className="flex-row items-center">
-              {editing && (
-                <TouchableOpacity
-                  onPress={openCreateSection}
-                  className="mr-2 h-11 w-11 items-center justify-center rounded-xl bg-clover-100"
-                  accessibilityLabel="Add closet section"
-                >
-                  <Ionicons name="add" size={21} color="#12372A" />
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                onPress={() => setEditing((current) => !current)}
-                className={`rounded-xl px-3 py-2 ${
-                  editing ? "bg-clover-600" : "bg-stone-100"
-                }`}
-              >
-                <Text
-                  className={`text-xs font-semibold ${
-                    editing ? "text-white" : "text-stone-600"
-                  }`}
-                >
-                  {editing ? "Done" : "Edit sections"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-        <TouchableOpacity
-          accessibilityRole="button"
-          onPress={() => router.push("/outfit/create")}
-          className="mt-3 min-h-11 flex-row items-center justify-center rounded-xl bg-clover-600 py-3"
-        >
-          <Ionicons name="layers-outline" size={18} color="#ffffff" />
-          <Text className="ml-2 text-sm font-bold text-white">
-            Create your own outfit
-          </Text>
-        </TouchableOpacity>
+        )}
+        {view !== "laundry" && (
+          <TouchableOpacity
+            accessibilityRole="button"
+            onPress={() => router.push("/outfit/create")}
+            className="mt-3 min-h-11 flex-row items-center justify-center rounded-xl bg-clover-600 py-3"
+          >
+            <Ionicons name="layers-outline" size={18} color="#ffffff" />
+            <Text className="ml-2 text-sm font-bold text-white">
+              Create your own outfit
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {error && (
@@ -270,7 +392,34 @@ export default function ClosetScreen() {
         </View>
       )}
 
-      {view === "spatial" ? (
+      {view === "laundry" ? (
+        <LaundryBasket
+          items={laundry}
+          loading={laundryLoading}
+          washing={washing}
+          onRefresh={() => void loadLaundry()}
+          onOpen={(garmentId) => router.push(`/garment/${garmentId}`)}
+          onWashAll={() =>
+            void handleWash(laundry.map((item) => item.garment.id))
+          }
+          onWashItem={(garmentId) => void handleWash([garmentId])}
+        />
+      ) : view === "outfits" ? (
+        <SavedOutfitsList
+          outfits={savedOutfits}
+          loading={outfitsLoading}
+          onRefresh={() => void loadSavedOutfits()}
+          onOpen={(outfit) => router.push(`/outfit/${outfit.id}`)}
+          onSchedule={(outfit) =>
+            router.push({
+              pathname: "/(tabs)/calendar",
+              params: { outfitId: outfit.id },
+            })
+          }
+          onDelete={(outfit) => void handleDeleteOutfit(outfit.id)}
+          onCreate={() => router.push("/outfit/create")}
+        />
+      ) : view === "spatial" ? (
         sections.length > 0 ? (
           <SpatialCloset
             sections={sections}
@@ -317,6 +466,10 @@ export default function ClosetScreen() {
                 onRetry={() => void handleRetry(item.id)}
               />
             )}
+            initialNumToRender={12}
+            maxToRenderPerBatch={9}
+            windowSize={5}
+            removeClippedSubviews
             contentContainerClassName="px-2 pb-4"
             refreshControl={
               <RefreshControl

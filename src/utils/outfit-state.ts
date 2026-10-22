@@ -29,6 +29,19 @@ export function filterSaved<T extends { is_saved: boolean }>(
   return outfits.filter((outfit) => outfit.is_saved);
 }
 
+export function displayOutfitName(
+  outfit: { id: string; name: string | null; created_at: string },
+  savedOutfits: { id: string; created_at: string }[] = []
+): string {
+  if (outfit.name?.trim()) return outfit.name.trim();
+  const ordered = [...savedOutfits].sort((a, b) => {
+    const byDate = a.created_at.localeCompare(b.created_at);
+    return byDate !== 0 ? byDate : a.id.localeCompare(b.id);
+  });
+  const index = ordered.findIndex((item) => item.id === outfit.id);
+  return `Outfit ${index >= 0 ? index + 1 : 1}`;
+}
+
 export function replaceDisplayedItem<
   T extends {
     garment: { id: string };

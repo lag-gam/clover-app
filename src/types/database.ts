@@ -61,6 +61,8 @@ export type GarmentColor =
   | "brown"
   | "beige"
   | "cream"
+  | "gold"
+  | "silver"
   | "multicolor";
 
 export type GarmentPattern =
@@ -85,6 +87,7 @@ export type GarmentMaterial =
   | "nylon"
   | "cashmere"
   | "synthetic blend"
+  | "metal"
   | "other";
 
 export type GarmentFit = "slim" | "regular" | "relaxed" | "oversized";
@@ -137,8 +140,21 @@ export interface Garment {
   processing_completed_at: string | null;
   section_id: string;
   position: number;
+  last_laundered_at?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface GarmentProcessingEvent {
+  id: number;
+  garment_id: string;
+  user_id: string;
+  attempt: number;
+  stage: string;
+  status: string;
+  message: string;
+  details: Record<string, unknown>;
+  created_at: string;
 }
 
 export interface ClosetSection {

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import {
   View,
   Text,
@@ -16,7 +17,7 @@ interface GarmentCardProps {
   onRetry?: () => void;
 }
 
-export function GarmentCard({
+function GarmentCardComponent({
   garment,
   onPress,
   onRetry,
@@ -68,6 +69,11 @@ export function GarmentCard({
               ? "analysis stalled"
               : garment.processing_status}
         </Text>
+        {isRetryable && garment.processing_error ? (
+          <Text className="mt-1 text-[10px] text-red-600" numberOfLines={3}>
+            {garment.processing_error}
+          </Text>
+        ) : null}
         {isRetryable && onRetry && (
           <TouchableOpacity
             className="mt-2 bg-red-50 rounded py-1 items-center"
@@ -82,3 +88,5 @@ export function GarmentCard({
     </TouchableOpacity>
   );
 }
+
+export const GarmentCard = memo(GarmentCardComponent);

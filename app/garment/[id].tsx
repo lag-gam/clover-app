@@ -15,12 +15,13 @@ import {
   updateGarment,
   deleteGarment,
   retryGarmentProcessing,
+  fetchGarmentProcessingEvents,
   GarmentMetadataInput,
   isGarmentProcessingStale,
   uploadGarmentBackImage,
 } from "@/services/garment.service";
 import { MetadataEditor } from "@/components/MetadataEditor";
-import { Garment } from "@/types/database";
+import { Garment, GarmentProcessingEvent } from "@/types/database";
 import { FORMALITY_LABELS } from "@/constants/categories";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/hooks/useAuth";
@@ -39,6 +40,9 @@ export default function GarmentDetailScreen() {
   const [displaySide, setDisplaySide] =
     useState<GarmentDisplaySide>("front");
   const [uploadingBack, setUploadingBack] = useState(false);
+  const [processingEvents, setProcessingEvents] = useState<
+    GarmentProcessingEvent[]
+  >([]);
 
   useEffect(() => {
     void loadGarment();
@@ -46,6 +50,11 @@ export default function GarmentDetailScreen() {
 
   useEffect(() => {
     if (!id) return;
+
+    const loadEvents = () => {
+      void fetchGarmentProcessingEvents(id).then(setProcessingEvents);
+    };
+    loadEvents();
 
     const channel = supabase
       .channel(`garment:${id}`)
@@ -58,6 +67,16 @@ export default function GarmentDetailScreen() {
           filter: `id=eq.${id}`,
         },
         (payload) => setGarment(payload.new as Garment)
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "garment_processing_events",
+          filter: `garment_id=eq.${id}`,
+        },
+        () => loadEvents()
       )
       .subscribe();
 
@@ -358,9 +377,29 @@ export default function GarmentDetailScreen() {
               </Text>
             </View>
             {garment.processing_error && (
-              <Text className="text-sm text-red-600 mt-2">
+              <Text className="text-sm text-red-600 mt-2" selectable>
                 {garment.processing_error}
               </Text>
+            )}
+            {processingEvents.length > 0 && (
+              <View className="mt-3 rounded-lg bg-white/80 px-3 py-2">
+                <Text className="mb-1 text-[11px] font-bold uppercase tracking-wider text-stone-500">
+                  Analysis log
+                </Text>
+                {processingEvents.map((event) => (
+                  <Text
+                    key={event.id}
+                    selectable
+                    className={`text-[11px] leading-4 ${
+                      event.status === "failed"
+                        ? "text-red-700"
+                        : "text-stone-600"
+                    }`}
+                  >
+                    {event.stage} · {event.status}: {event.message}
+                  </Text>
+                ))}
+              </View>
             )}
             {processingRetryable && (
               <TouchableOpacity

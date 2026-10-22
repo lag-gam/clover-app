@@ -17,6 +17,9 @@ const {
 const {
   getClosetLayout,
 } = require("../.feature-test-build/utils/closet-layout.js");
+const {
+  buildLaundryItems,
+} = require("../.feature-test-build/utils/laundry.js");
 
 const garment = {
   image_url: "front-original",
@@ -129,6 +132,54 @@ test("closet pages stay full width with a two-thirds-height image region", () =>
     pageWidth: 280,
     imageHeight: 360,
   });
+});
+
+test("laundry fills from past scheduled outfits until washed", () => {
+  const shirt = { id: "shirt", category: "tops", last_laundered_at: null };
+  const shoes = { id: "shoes", category: "shoes", last_laundered_at: null };
+  const washed = {
+    id: "jacket",
+    category: "outerwear",
+    last_laundered_at: "2026-10-18T16:00:00.000Z",
+  };
+
+  const items = buildLaundryItems(
+    [
+      {
+        scheduled_date: "2026-10-17",
+        outfit: {
+          items: [{ garment: shirt }, { garment: shoes }, { garment: washed }],
+        },
+      },
+      {
+        scheduled_date: "2026-10-16",
+        outfit: { items: [{ garment: shirt }] },
+      },
+      {
+        scheduled_date: "2026-10-18",
+        outfit: { items: [{ garment: { ...shirt, id: "today-top" } }] },
+      },
+    ],
+    "2026-10-18"
+  );
+
+  assert.deepEqual(
+    items.map((item) => ({
+      id: item.garment.id,
+      lastWornDate: item.lastWornDate,
+      wearCount: item.wearCount,
+    })),
+    [{ id: "shirt", lastWornDate: "2026-10-17", wearCount: 2 }]
+  );
+});
+
+test("laundry migration stores a wash timestamp on garments", () => {
+  const sql = readFileSync(
+    new URL("../supabase/migrations/014_laundry.sql", `file://${__filename}`)
+      .pathname,
+    "utf8"
+  );
+  assert.match(sql, /ADD COLUMN IF NOT EXISTS last_laundered_at TIMESTAMPTZ/);
 });
 
 test("durable swap RPC enforces authenticated ownership", () => {

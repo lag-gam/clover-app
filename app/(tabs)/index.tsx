@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -23,7 +23,7 @@ import {
 } from "@/components/FlatLayCollage";
 import { OutfitItemActionSheet } from "@/components/OutfitItemActionSheet";
 import { SwapSheet } from "@/components/SwapSheet";
-import { SagModeToggle } from "@/components/SagModeToggle";
+import { useSagMode } from "@/hooks/useSagMode";
 import { useStyleProfile } from "@/hooks/useStyleProfile";
 import { Garment } from "@/types/database";
 import { Ionicons } from "@expo/vector-icons";
@@ -42,13 +42,17 @@ export default function HomeScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [garmentCount, setGarmentCount] = useState(0);
-  const [sagMode, setSagMode] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [actionItem, setActionItem] = useState<FlatLayItem | null>(null);
   const [savingOutfit, setSavingOutfit] = useState(false);
   const [savedIndexes, setSavedIndexes] = useState<Set<number>>(new Set());
+  const [ratingFeedback, setRatingFeedback] = useState<
+    "liked" | "disliked" | "skipped" | "saved" | null
+  >(null);
+  const advancingRef = useRef(false);
 
   const { profile, maybeRecalculate, isColdStart } = useStyleProfile();
+  const { sagMode, reload: reloadSagMode } = useSagMode();
 
   // Swap sheet state
   const [swapTarget, setSwapTarget] = useState<Garment | null>(null);
@@ -56,13 +60,14 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      reloadSagMode();
       if (user) {
         fetchGarments(user.id).then((g) => {
           setAllGarments(g);
           setGarmentCount(g.length);
         });
       }
-    }, [user])
+    }, [reloadSagMode, user])
   );
 
   const generateOutfits = async () => {
@@ -112,6 +117,8 @@ export default function HomeScreen() {
       setOutfits(saved);
       setCurrentIndex(0);
       setSavedIndexes(new Set());
+      setRatingFeedback(null);
+      advancingRef.current = false;
     } catch (e) {
       console.error("Generation error:", e);
     } finally {
@@ -119,23 +126,32 @@ export default function HomeScreen() {
     }
   };
 
-  const handleInteraction = async (type: "liked" | "disliked" | "skipped") => {
-    const current = outfits[currentIndex];
-    if (!current?.savedId || !user) return;
-
-    await logInteraction(user.id, current.savedId, type);
-    setCurrentIndex((i) => i + 1);
-
-    // Trigger style recalculation check
-    maybeRecalculate();
+  const advanceAfterRating = (
+    type: "liked" | "disliked" | "skipped" | "saved"
+  ) => {
+    if (advancingRef.current) return false;
+    advancingRef.current = true;
+    setRatingFeedback(type);
+    setTimeout(() => {
+      setCurrentIndex((index) => index + 1);
+      setRatingFeedback(null);
+      advancingRef.current = false;
+    }, 420);
+    return true;
   };
 
-  const handleSagModeChange = (value: boolean) => {
-    setSagMode(value);
-    setOutfits([]);
-    setCurrentIndex(0);
-    setSavedIndexes(new Set());
-    setGenerationError(null);
+  const handleInteraction = (type: "liked" | "disliked" | "skipped") => {
+    const current = outfits[currentIndex];
+    if (!current || !advanceAfterRating(type)) return;
+
+    if (current.savedId && user) {
+      void logInteraction(user.id, current.savedId, type).catch((error) => {
+        console.error("Could not save rating:", error);
+      });
+      void maybeRecalculate().catch((error) => {
+        console.error("Style recalculation failed:", error);
+      });
+    }
   };
 
   const beginSwap = (garment: Garment) => {
@@ -231,21 +247,33 @@ export default function HomeScreen() {
 
   const saveCurrent = async () => {
     const current = outfits[currentIndex];
-    if (!current || !user || savingOutfit || savedIndexes.has(currentIndex)) {
+    if (!current || !user) {
+      throw new Error("Could not save outfit");
+    }
+    if (savedIndexes.has(currentIndex)) {
+      advanceAfterRating("saved");
       return;
     }
+    if (savingOutfit) return;
     setSavingOutfit(true);
     try {
       const saved = await saveOutfit(user.id, current, true);
       await logInteraction(user.id, saved.outfit.id, "selected");
+      await logInteraction(user.id, saved.outfit.id, "liked");
+      if (current.savedId && current.savedId !== saved.outfit.id) {
+        await logInteraction(user.id, current.savedId, "liked");
+      }
       setSavedIndexes((indexes) => new Set(indexes).add(currentIndex));
-      Alert.alert("Outfit saved", "Your edited outfit is ready for the calendar.");
-      maybeRecalculate();
+      void maybeRecalculate().catch((error) => {
+        console.error("Style recalculation failed:", error);
+      });
+      advanceAfterRating("saved");
     } catch (error) {
       Alert.alert(
         "Could not save outfit",
         error instanceof Error ? error.message : "Please try again."
       );
+      throw error;
     } finally {
       setSavingOutfit(false);
     }
@@ -303,9 +331,6 @@ export default function HomeScreen() {
             ? `You reviewed ${outfits.length} outfits. Generate more?`
             : "Generate outfit recommendations from your closet"}
         </Text>
-        <View className="mt-5 w-full">
-          <SagModeToggle value={sagMode} onValueChange={handleSagModeChange} />
-        </View>
         {generationError && (
           <Text className="mt-3 text-center text-sm text-red-600">
             {generationError}
@@ -336,42 +361,51 @@ export default function HomeScreen() {
         <Text className="text-xs text-gray-400 text-center">
           {currentIndex + 1} / {outfits.length}
         </Text>
-        <View className="mt-2">
-          <SagModeToggle value={sagMode} onValueChange={handleSagModeChange} />
-        </View>
         {manualBuilderButton}
       </View>
 
-      <OutfitCard
-        garments={current.garments}
-        score={current.score}
-        onLike={() => handleInteraction("liked")}
-        onDislike={() => handleInteraction("disliked")}
-        onSkip={() => handleInteraction("skipped")}
-        onItemTap={setActionItem}
-      />
-
-      <TouchableOpacity
-        disabled={savingOutfit || savedIndexes.has(currentIndex)}
-        onPress={() => void saveCurrent()}
-        className={`mx-4 mt-3 items-center rounded-xl py-3 ${
-          savedIndexes.has(currentIndex) ? "bg-clover-100" : "bg-clover-600"
-        }`}
-      >
-        <Text
-          className={
-            savedIndexes.has(currentIndex)
-              ? "font-bold text-clover-800"
-              : "font-bold text-white"
-          }
-        >
-          {savingOutfit
-            ? "Saving…"
-            : savedIndexes.has(currentIndex)
-              ? "Outfit saved"
-              : "Save outfit"}
-        </Text>
-      </TouchableOpacity>
+      <View>
+        <OutfitCard
+          key={current.savedId ?? `outfit-${currentIndex}`}
+          garments={current.garments}
+          score={current.score}
+          onLike={() => handleInteraction("liked")}
+          onDislike={() => handleInteraction("disliked")}
+          onSkip={() => handleInteraction("skipped")}
+          onSave={() => saveCurrent()}
+          onItemTap={setActionItem}
+        />
+        {ratingFeedback && (
+          <View
+            pointerEvents="none"
+            className="absolute inset-0 items-center justify-center"
+          >
+            <View
+              className={`h-24 w-24 items-center justify-center rounded-full ${
+                ratingFeedback === "liked" || ratingFeedback === "saved"
+                  ? "bg-clover-600"
+                  : ratingFeedback === "disliked"
+                    ? "bg-red-500"
+                    : "bg-stone-400"
+              }`}
+            >
+              <Ionicons
+                name={
+                  ratingFeedback === "saved"
+                    ? "add"
+                    : ratingFeedback === "liked"
+                      ? "checkmark"
+                      : ratingFeedback === "disliked"
+                        ? "close"
+                        : "arrow-down"
+                }
+                size={48}
+                color="#ffffff"
+              />
+            </View>
+          </View>
+        )}
+      </View>
 
       {/* Swap sheet */}
       {swapTarget && (

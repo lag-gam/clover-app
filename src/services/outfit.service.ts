@@ -6,6 +6,7 @@ import {
   OutfitItem,
 } from "@/types/database";
 import { averageVectors, cosineSimilarity } from "@/utils/math";
+import { displayOutfitName } from "@/utils/outfit-state";
 
 export interface OutfitCandidate {
   garments: {
@@ -316,6 +317,24 @@ export function generateOutfitCandidates(
   return candidates;
 }
 
+async function nextSavedOutfitName(userId: string): Promise<string> {
+  const { supabase } = await import("@/lib/supabase");
+  const { data, error } = await supabase
+    .from("outfits")
+    .select("name")
+    .eq("user_id", userId)
+    .eq("is_saved", true);
+
+  if (error) throw new Error(`Save outfit error: ${error.message}`);
+
+  let nextNumber = (data?.length ?? 0) + 1;
+  for (const row of data ?? []) {
+    const match = /^Outfit (\d+)$/i.exec((row.name ?? "").trim());
+    if (match) nextNumber = Math.max(nextNumber, Number(match[1]) + 1);
+  }
+  return `Outfit ${nextNumber}`;
+}
+
 export async function saveOutfit(
   userId: string,
   candidate: OutfitCandidate,
@@ -331,6 +350,7 @@ export async function saveOutfit(
     .from("outfits")
     .insert({
       user_id: userId,
+      name: isSaved ? await nextSavedOutfitName(userId) : null,
       embedding: currentEmbedding.length > 0 ? currentEmbedding : null,
       score: candidate.score,
       is_saved: isSaved,
@@ -398,7 +418,7 @@ export async function saveManualOutfit(
     .from("outfits")
     .insert({
       user_id: userId,
-      name: name?.trim() || null,
+      name: name?.trim() || (await nextSavedOutfitName(userId)),
       embedding,
       score: null,
       is_saved: true,
@@ -446,8 +466,19 @@ export async function fetchOutfitWithItems(
 
   if (itemsError) throw new Error(`Fetch items error: ${itemsError.message}`);
 
+  const savedOutfit = outfit as Outfit;
+  if (!savedOutfit.name?.trim() && savedOutfit.is_saved) {
+    const { data: siblings } = await supabase
+      .from("outfits")
+      .select("id, created_at")
+      .eq("user_id", savedOutfit.user_id)
+      .eq("is_saved", true)
+      .order("created_at", { ascending: true });
+    savedOutfit.name = displayOutfitName(savedOutfit, siblings ?? []);
+  }
+
   return {
-    outfit: outfit as Outfit,
+    outfit: savedOutfit,
     items: items as (OutfitItem & { garment: Garment })[],
   };
 }
@@ -505,4 +536,10 @@ export function getAlternatives(
     }
     return isCompatible([...otherGarments, g]);
   });
+}
+
+export async function deleteOutfit(outfitId: string): Promise<void> {
+  const { supabase } = await import("@/lib/supabase");
+  const { error } = await supabase.from("outfits").delete().eq("id", outfitId);
+  if (error) throw new Error(`Delete outfit error: ${error.message}`);
 }

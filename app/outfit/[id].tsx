@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
+  deleteOutfit,
   fetchOutfitWithItems,
   updateOutfitItemSide,
 } from "@/services/outfit.service";
@@ -54,6 +55,32 @@ export default function OutfitDetailScreen() {
     Alert.alert("Logged", "Outfit marked as worn!");
   };
 
+  const handleDelete = () => {
+    if (!outfit) return;
+    Alert.alert(
+      "Delete outfit?",
+      "This removes it from Closet and Calendar. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteOutfit(outfit.id);
+              router.back();
+            } catch (error) {
+              Alert.alert(
+                "Could not delete outfit",
+                error instanceof Error ? error.message : "Please try again."
+              );
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-clover-50">
@@ -66,13 +93,11 @@ export default function OutfitDetailScreen() {
 
   return (
     <ScrollView className="flex-1 bg-clover-50">
-      {outfit.name && (
-        <View className="px-4 pt-5">
-          <Text className="text-center text-2xl font-bold text-stone-900">
-            {outfit.name}
-          </Text>
-        </View>
-      )}
+      <View className="px-4 pt-5">
+        <Text className="text-center text-2xl font-bold text-stone-900">
+          {outfit.name?.trim() || "Outfit"}
+        </Text>
+      </View>
       <View className="px-4 py-6">
         <FlatLayCollage
           items={items}
@@ -95,7 +120,7 @@ export default function OutfitDetailScreen() {
           <View className="mb-4 flex-row items-center rounded-xl border border-clover-200 bg-clover-100 px-3 py-3">
             <Ionicons name="checkmark-circle" size={20} color="#12372A" />
             <Text className="ml-2 flex-1 text-sm font-medium text-clover-800">
-              Your outfit is saved. Add it to your calendar when you are ready.
+              Saved as {outfit.name?.trim() || "Outfit"}. Find it in Closet → Outfits.
             </Text>
           </View>
         )}
@@ -119,6 +144,15 @@ export default function OutfitDetailScreen() {
           onPress={handleWear}
         >
           <Text className="text-white font-semibold">Mark as Worn</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Delete outfit"
+          className="mt-3 flex-row items-center justify-center rounded-lg border border-red-300 py-3"
+          onPress={handleDelete}
+        >
+          <Ionicons name="trash-outline" size={18} color="#dc2626" />
+          <Text className="ml-2 font-semibold text-red-500">Delete outfit</Text>
         </TouchableOpacity>
       </View>
       <OutfitItemActionSheet

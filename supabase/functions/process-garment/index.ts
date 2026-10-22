@@ -36,10 +36,10 @@ const GARMENT_ANALYSIS_PROMPT = `You are a fashion analysis AI. Analyze this gar
     underwear ["boxers", "briefs", "boxer_briefs", "other"],
     accessories ["necklace", "watch", "hat", "beanie", "belt", "bag", "glasses", "bracelet", "ring", "earbuds", "other"],
   "metal_tone": dominant visible metal/hardware tone, one of ["none", "silver", "gold", "rose_gold", "mixed"],
-  "color": primary color, one of ["black", "white", "gray", "navy", "blue", "red", "pink", "green", "yellow", "orange", "purple", "brown", "beige", "cream", "multicolor"],
+  "color": primary garment/fabric color, one of ["black", "white", "gray", "navy", "blue", "red", "pink", "green", "yellow", "orange", "purple", "brown", "beige", "cream", "gold", "silver", "multicolor"]. Use gold/silver for metallic fabric or jewelry color. metal_tone is separate hardware tone.,
   "secondary_color": secondary color if present (same options as color), or null,
   "pattern": one of ["solid", "stripes", "plaid", "floral", "polka dots", "geometric", "animal print", "abstract", "other"],
-  "material": best guess, one of ["cotton", "polyester", "silk", "wool", "denim", "leather", "linen", "nylon", "cashmere", "synthetic blend", "other"],
+  "material": best guess, one of ["cotton", "polyester", "silk", "wool", "denim", "leather", "linen", "nylon", "cashmere", "synthetic blend", "metal", "other"]. Use metal for jewelry, lighters, and other metal accessories.,
   "fit": one of ["slim", "regular", "relaxed", "oversized"],
   "formality": integer 1-5,
   "tags": array of 3-8 useful styling tags covering silhouette, season, aesthetic, and notable details
@@ -93,8 +93,32 @@ const colors = [
   "brown",
   "beige",
   "cream",
+  "gold",
+  "silver",
   "multicolor",
 ];
+
+const COLOR_ALIASES: Record<string, string> = {
+  grey: "gray",
+  golden: "gold",
+  metallic_gold: "gold",
+  metallic_silver: "silver",
+  khaki: "beige",
+  tan: "beige",
+  camel: "beige",
+  nude: "beige",
+  ivory: "cream",
+  off_white: "cream",
+  offwhite: "cream",
+  burgundy: "red",
+  maroon: "red",
+  wine: "red",
+  teal: "green",
+  olive: "green",
+  charcoal: "gray",
+  navy_blue: "navy",
+  rose: "pink",
+};
 const patterns = [
   "solid",
   "stripes",
@@ -117,8 +141,40 @@ const materials = [
   "nylon",
   "cashmere",
   "synthetic blend",
+  "metal",
   "other",
 ];
+
+const MATERIAL_ALIASES: Record<string, string> = {
+  metallic: "metal",
+  steel: "metal",
+  stainless_steel: "metal",
+  brass: "metal",
+  bronze: "metal",
+  aluminum: "metal",
+  aluminium: "metal",
+  zinc: "metal",
+  chrome: "metal",
+  pewter: "metal",
+  titanium: "metal",
+  iron: "metal",
+  copper: "metal",
+  gold: "metal",
+  silver: "metal",
+  plastic: "other",
+  acrylic: "other",
+  resin: "other",
+  rubber: "other",
+  glass: "other",
+  stone: "other",
+  wood: "other",
+  canvas: "cotton",
+  fleece: "synthetic blend",
+  spandex: "synthetic blend",
+  elastane: "synthetic blend",
+  viscose: "synthetic blend",
+  rayon: "synthetic blend",
+};
 const fits = ["slim", "regular", "relaxed", "oversized"];
 
 function logProcess(
@@ -137,6 +193,181 @@ function logProcess(
   if (level === "error") console.error(line);
   else if (level === "warn") console.warn(line);
   else console.log(line);
+}
+
+type ProcessClient = ReturnType<typeof createClient>;
+
+function mapProcessEvent(
+  step: string,
+  details?: Record<string, unknown>,
+): { stage: string; status: string; message: string } | null {
+  const errorText =
+    typeof details?.error === "string"
+      ? details.error
+      : typeof details?.publicError === "string"
+        ? details.publicError
+        : "";
+  const byStep: Record<string, { stage: string; status: string; message: string }> = {
+    accepted: {
+      stage: "accepted",
+      status: "info",
+      message: "Processor accepted the garment",
+    },
+    not_found: {
+      stage: "failed",
+      status: "failed",
+      message: "Garment not found for this user",
+    },
+    "claim.failed": {
+      stage: "claimed",
+      status: "failed",
+      message: errorText || "Could not claim garment for analysis",
+    },
+    "claim.skipped": {
+      stage: "claimed",
+      status: "skipped",
+      message: String(details?.reason ?? "Already processing or not owned"),
+    },
+    "claim.ok": {
+      stage: "claimed",
+      status: "succeeded",
+      message: "Claimed garment for analysis",
+    },
+    "vision.start": {
+      stage: "vision",
+      status: "started",
+      message: "Starting vision analysis",
+    },
+    "vision.ok": {
+      stage: "vision",
+      status: "succeeded",
+      message: "Vision analysis complete",
+    },
+    "embedding.start": {
+      stage: "embedding",
+      status: "started",
+      message: "Generating embedding",
+    },
+    "embedding.ok": {
+      stage: "embedding",
+      status: "succeeded",
+      message: "Embedding generated",
+    },
+    "removebg.start": {
+      stage: "background_removal",
+      status: "started",
+      message: "Starting background removal",
+    },
+    "removebg.ok": {
+      stage: "background_removal",
+      status: "succeeded",
+      message: "Background removed",
+    },
+    "removebg.skipped": {
+      stage: "background_removal",
+      status: "skipped",
+      message: errorText || "Background removal skipped",
+    },
+    "back.removebg.start": {
+      stage: "background_removal",
+      status: "started",
+      message: "Starting back-photo cutout",
+    },
+    "back.removebg.ok": {
+      stage: "cutout_upload",
+      status: "succeeded",
+      message: "Back-photo cutout saved",
+    },
+    "back.removebg.skipped": {
+      stage: "background_removal",
+      status: "skipped",
+      message: errorText || "Back-photo cutout skipped",
+    },
+    "back.save.failed": {
+      stage: "save",
+      status: "failed",
+      message: errorText || "Could not save back cutout",
+    },
+    "save.legacy_fallback": {
+      stage: "save",
+      status: "skipped",
+      message: "Saved without new taxonomy columns",
+    },
+    ready: {
+      stage: "ready",
+      status: "succeeded",
+      message: "Garment is ready",
+    },
+    failed: {
+      stage: "failed",
+      status: "failed",
+      message: errorText || "Garment analysis failed",
+    },
+    "failed.save_error": {
+      stage: "save",
+      status: "failed",
+      message: errorText || "Could not save the failure state",
+    },
+  };
+  return byStep[step] ?? null;
+}
+
+function sanitizeEventDetails(
+  details?: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!details) return {};
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(details)) {
+    if (key === "userId") continue;
+    if (
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean" ||
+      value === null
+    ) {
+      out[key] = typeof value === "string" ? value.slice(0, 280) : value;
+    } else {
+      out[key] = String(value).slice(0, 200);
+    }
+  }
+  return out;
+}
+
+function createRecorder(
+  supabase: ProcessClient,
+  garmentId: string,
+  userId: string,
+) {
+  let attempt = 0;
+  return {
+    setAttempt(nextAttempt: number) {
+      attempt = nextAttempt;
+    },
+    async record(
+      level: "info" | "warn" | "error",
+      step: string,
+      details?: Record<string, unknown>,
+    ) {
+      logProcess(level, garmentId, step, details);
+      const mapped = mapProcessEvent(step, details);
+      if (!mapped) return;
+      const { error } = await supabase.from("garment_processing_events").insert({
+        garment_id: garmentId,
+        user_id: userId,
+        attempt,
+        stage: mapped.stage,
+        status: mapped.status,
+        message: mapped.message.slice(0, 500),
+        details: sanitizeEventDetails(details),
+      });
+      if (error) {
+        logProcess("warn", garmentId, "event.write_failed", {
+          step,
+          error: error.message,
+        });
+      }
+    },
+  };
 }
 
 Deno.serve(async (request) => {
@@ -183,18 +414,18 @@ Deno.serve(async (request) => {
     return json({ error: "mode must be front or back" }, 400);
   }
 
-  logProcess("info", garmentId, "accepted", {
-    mode,
-    userId: user.id,
-    openaiConfigured: Boolean(OPENAI_API_KEY),
-    removeBgConfigured: Boolean(REMOVEBG_API_KEY),
-  });
-
   const serviceClient = createClient(
     SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY,
     { auth: { persistSession: false, autoRefreshToken: false } },
   );
+  const recorder = createRecorder(serviceClient, garmentId, user.id);
+  await recorder.record("info", "accepted", {
+    mode,
+    openaiConfigured: Boolean(OPENAI_API_KEY),
+    removeBgConfigured: Boolean(REMOVEBG_API_KEY),
+  });
+
   const { data: garment } = await serviceClient
     .from("garments")
     .select("id, back_image_url")
@@ -203,7 +434,7 @@ Deno.serve(async (request) => {
     .maybeSingle();
 
   if (!garment) {
-    logProcess("warn", garmentId, "not_found", { userId: user.id });
+    await recorder.record("warn", "not_found");
     return json({ error: "Garment not found" }, 404);
   }
 
@@ -214,19 +445,23 @@ Deno.serve(async (request) => {
     EdgeRuntime.waitUntil(
       processBackImage(
         serviceClient,
+        recorder,
         garmentId,
         user.id,
         garment.back_image_url,
       ),
     );
   } else {
-    EdgeRuntime.waitUntil(processGarment(serviceClient, garmentId, user.id));
+    EdgeRuntime.waitUntil(
+      processGarment(serviceClient, recorder, garmentId, user.id),
+    );
   }
   return json({ accepted: true }, 202);
 });
 
 async function processBackImage(
-  supabase: ReturnType<typeof createClient>,
+  supabase: ProcessClient,
+  recorder: ReturnType<typeof createRecorder>,
   garmentId: string,
   userId: string,
   backImageUrl: string,
@@ -236,7 +471,7 @@ async function processBackImage(
     if (!REMOVEBG_API_KEY) {
       throw new Error("remove.bg is not configured");
     }
-    logProcess("info", garmentId, "back.removebg.start");
+    await recorder.record("info", "back.removebg.start");
     const cutoutBytes = await removeBackground(backImageUrl);
     const cutoutPath = `${userId}/${garmentId}_back_cutout.png`;
     const { error: uploadError } = await supabase.storage
@@ -252,12 +487,12 @@ async function processBackImage(
       data: { publicUrl },
     } = supabase.storage.from("garment-images").getPublicUrl(cutoutPath);
     backCutoutUrl = publicUrl;
-    logProcess("info", garmentId, "back.removebg.ok", {
+    await recorder.record("info", "back.removebg.ok", {
       bytes: cutoutBytes.byteLength,
     });
   } catch (error) {
     // A back photo remains useful if remove.bg is unavailable or times out.
-    logProcess("warn", garmentId, "back.removebg.skipped", {
+    await recorder.record("warn", "back.removebg.skipped", {
       error: errorMessage(error),
     });
   }
@@ -272,14 +507,15 @@ async function processBackImage(
     .eq("user_id", userId)
     .eq("back_image_url", backImageUrl);
   if (updateError) {
-    logProcess("error", garmentId, "back.save.failed", {
+    await recorder.record("error", "back.save.failed", {
       error: updateError.message,
     });
   }
 }
 
 async function processGarment(
-  supabase: ReturnType<typeof createClient>,
+  supabase: ProcessClient,
+  recorder: ReturnType<typeof createRecorder>,
   garmentId: string,
   userId: string,
 ) {
@@ -291,19 +527,35 @@ async function processGarment(
   const garment = claimedRows?.[0];
 
   if (claimError) {
-    logProcess("error", garmentId, "claim.failed", {
+    await recorder.record("error", "claim.failed", {
       error: claimError.message,
     });
+    await supabase
+      .from("garments")
+      .update({
+        processing_status: "failed",
+        processing_error:
+          `Could not claim garment for analysis. ${claimError.message}`.slice(
+            0,
+            280,
+          ),
+        processing_completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", garmentId)
+      .eq("user_id", userId)
+      .in("processing_status", ["pending", "processing"]);
     return;
   }
   if (!garment) {
-    logProcess("warn", garmentId, "claim.skipped", {
+    await recorder.record("warn", "claim.skipped", {
       reason: "already processing, ready, or not owned",
     });
     return;
   }
 
-  logProcess("info", garmentId, "claim.ok", {
+  recorder.setAttempt(garment.processing_attempts);
+  await recorder.record("info", "claim.ok", {
     attempt: garment.processing_attempts,
   });
 
@@ -311,16 +563,16 @@ async function processGarment(
     assertSecrets();
 
     // Analyze first so a vision/metadata failure does not spend a remove.bg credit.
-    logProcess("info", garmentId, "vision.start");
+    await recorder.record("info", "vision.start");
     const metadata = await analyzeGarment(garment.image_url);
-    logProcess("info", garmentId, "vision.ok", {
+    await recorder.record("info", "vision.ok", {
       category: metadata.category,
       subtype: metadata.subtype,
     });
 
-    logProcess("info", garmentId, "embedding.start");
+    await recorder.record("info", "embedding.start");
     const embedding = await generateEmbedding(metadata);
-    logProcess("info", garmentId, "embedding.ok", {
+    await recorder.record("info", "embedding.ok", {
       dimensions: embedding.length,
     });
 
@@ -329,7 +581,7 @@ async function processGarment(
       if (!REMOVEBG_API_KEY) {
         throw new Error("remove.bg is not configured");
       }
-      logProcess("info", garmentId, "removebg.start");
+      await recorder.record("info", "removebg.start");
       const cutoutBytes = await removeBackground(garment.image_url);
       const cutoutPath = `${userId}/${garmentId}_cutout.png`;
       const { error: cutoutError } = await supabase.storage
@@ -345,11 +597,11 @@ async function processGarment(
         data: { publicUrl },
       } = supabase.storage.from("garment-images").getPublicUrl(cutoutPath);
       cutoutUrl = publicUrl;
-      logProcess("info", garmentId, "removebg.ok", {
+      await recorder.record("info", "removebg.ok", {
         bytes: cutoutBytes.byteLength,
       });
     } catch (error) {
-      logProcess("warn", garmentId, "removebg.skipped", {
+      await recorder.record("warn", "removebg.skipped", {
         error: errorMessage(error),
       });
     }
@@ -377,7 +629,7 @@ async function processGarment(
       updateResult.error &&
       isMissingTaxonomyColumn(updateResult.error.message)
     ) {
-      logProcess("warn", garmentId, "save.legacy_fallback", {
+      await recorder.record("warn", "save.legacy_fallback", {
         error: updateResult.error.message,
       });
       const {
@@ -406,12 +658,12 @@ async function processGarment(
       throw new Error(`Garment update failed: ${updateResult.error.message}`);
     }
 
-    logProcess("info", garmentId, "ready", {
+    await recorder.record("info", "ready", {
       ms: Date.now() - startedAt,
     });
   } catch (error) {
     const publicError = publicProcessingError(error);
-    logProcess("error", garmentId, "failed", {
+    await recorder.record("error", "failed", {
       ms: Date.now() - startedAt,
       error: errorMessage(error),
       publicError,
@@ -430,7 +682,7 @@ async function processGarment(
       .eq("processing_attempts", garment.processing_attempts);
 
     if (failureUpdateError) {
-      logProcess("error", garmentId, "failed.save_error", {
+      await recorder.record("error", "failed.save_error", {
         error: failureUpdateError.message,
       });
     }
@@ -554,6 +806,43 @@ async function generateEmbedding(metadata: Record<string, unknown>) {
   return embedding;
 }
 
+function normalizeLabel(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+}
+
+function coerceListedValue(
+  value: unknown,
+  allowed: string[],
+  aliases: Record<string, string> = {},
+): string | null {
+  const normalized = normalizeLabel(value);
+  if (allowed.includes(normalized)) return normalized;
+  const aliased =
+    aliases[normalized] ??
+    aliases[String(value ?? "").trim().toLowerCase()];
+  if (aliased && allowed.includes(aliased)) return aliased;
+  return null;
+}
+
+function coerceColor(
+  value: unknown,
+  fallback: string | null = "multicolor",
+): string | null {
+  const coerced = coerceListedValue(value, colors, COLOR_ALIASES);
+  if (coerced) return coerced;
+  if (
+    value == null ||
+    String(value).trim() === "" ||
+    String(value).trim().toLowerCase() === "null"
+  ) {
+    return null;
+  }
+  return fallback;
+}
+
 function validateMetadata(value: Record<string, unknown>) {
   if (typeof value?.name !== "string" || !value.name.trim()) {
     throw new Error("missing name");
@@ -561,36 +850,29 @@ function validateMetadata(value: Record<string, unknown>) {
   if (!categories.includes(value.category)) {
     throw new Error(`invalid category ${String(value.category)}`);
   }
-  if (
-    !subtypesByCategory[value.category as string]?.includes(value.subtype)
-  ) {
-    throw new Error(
-      `invalid subtype ${String(value.subtype)} for ${String(value.category)}`,
-    );
-  }
-  if (!metalTones.includes(value.metal_tone)) {
-    throw new Error(`invalid metal_tone ${String(value.metal_tone)}`);
-  }
-  if (!colors.includes(value.color)) {
-    throw new Error(`invalid color ${String(value.color)}`);
-  }
-  if (
-    value.secondary_color !== null &&
-    !colors.includes(value.secondary_color)
-  ) {
-    throw new Error(
-      `invalid secondary_color ${String(value.secondary_color)}`,
-    );
-  }
-  if (!patterns.includes(value.pattern)) {
-    throw new Error(`invalid pattern ${String(value.pattern)}`);
-  }
-  if (!materials.includes(value.material)) {
-    throw new Error(`invalid material ${String(value.material)}`);
-  }
-  if (!fits.includes(value.fit)) {
-    throw new Error(`invalid fit ${String(value.fit)}`);
-  }
+  const subtype =
+    coerceListedValue(
+      value.subtype,
+      subtypesByCategory[value.category as string] ?? ["other"],
+    ) ?? "other";
+  const metalTone = coerceListedValue(value.metal_tone, metalTones, {
+    rose: "rose_gold",
+    rosegold: "rose_gold",
+    "rose gold": "rose_gold",
+  }) ?? "none";
+  const color = coerceColor(value.color) ?? "multicolor";
+  const secondaryColor = coerceColor(value.secondary_color, null);
+  const pattern =
+    coerceListedValue(value.pattern, patterns, {
+      polka_dots: "polka dots",
+      polkadots: "polka dots",
+      dotted: "polka dots",
+      animal: "animal print",
+      print: "other",
+    }) ?? "other";
+  const material =
+    coerceListedValue(value.material, materials, MATERIAL_ALIASES) ?? "other";
+  const fit = coerceListedValue(value.fit, fits) ?? "regular";
   if (
     !Number.isInteger(value.formality) ||
     value.formality < 1 ||
@@ -608,13 +890,13 @@ function validateMetadata(value: Record<string, unknown>) {
   return {
     name: value.name.slice(0, 120),
     category: value.category,
-    subtype: value.subtype,
-    metal_tone: value.metal_tone,
-    color: value.color,
-    secondary_color: value.secondary_color,
-    pattern: value.pattern,
-    material: value.material,
-    fit: value.fit,
+    subtype,
+    metal_tone: metalTone,
+    color,
+    secondary_color: secondaryColor,
+    pattern,
+    material,
+    fit,
     formality: value.formality,
     tags: value.tags.slice(0, 10),
   };

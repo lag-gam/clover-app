@@ -246,6 +246,11 @@ function FullSizeGarment({
                 ? "Needs attention"
                 : garment.processing_status}
           </Text>
+          {isRetryable && garment.processing_error ? (
+            <Text style={styles.fullFailedDetail} numberOfLines={3}>
+              {garment.processing_error}
+            </Text>
+          ) : null}
         </View>
         <Ionicons name="chevron-forward" size={19} color="#77827B" />
       </View>
@@ -986,6 +991,12 @@ const styles = StyleSheet.create({
     color: "#991b1b",
     fontSize: 11,
     fontWeight: "700",
+  },
+  fullFailedDetail: {
+    marginTop: 4,
+    color: "#b91c1c",
+    fontSize: 11,
+    lineHeight: 14,
   },
   fullGarmentMeta: {
     minHeight: 66,

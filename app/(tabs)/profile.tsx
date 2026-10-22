@@ -10,7 +10,9 @@ import {
   View,
 } from "react-native";
 import { useFocusEffect } from "expo-router";
+import { SagModeToggle } from "@/components/SagModeToggle";
 import { useAuth } from "@/hooks/useAuth";
+import { useSagMode } from "@/hooks/useSagMode";
 import { useStyleProfile } from "@/hooks/useStyleProfile";
 import { fetchGarments } from "@/services/garment.service";
 import {
@@ -27,6 +29,7 @@ export default function ProfileScreen() {
   const { user, signOut } = useAuth();
   const { profile, interactionCount, loading, refresh, isColdStart } =
     useStyleProfile();
+  const { sagMode, setSagMode } = useSagMode();
   const [topGarments, setTopGarments] = useState<Garment[]>([]);
   const [pinterest, setPinterest] = useState<PinterestStatus | null>(null);
   const [selectedBoardIds, setSelectedBoardIds] = useState<string[]>([]);
@@ -376,6 +379,13 @@ export default function ProfileScreen() {
           </View>
         </View>
       )}
+
+      <View className="px-4 mb-6">
+        <Text className="mb-3 text-base font-semibold text-gray-800">
+          Settings
+        </Text>
+        <SagModeToggle value={sagMode} onValueChange={setSagMode} />
+      </View>
 
       <View className="px-4 pb-8">
         <TouchableOpacity

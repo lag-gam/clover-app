@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Image, Pressable, Text, View } from "react-native";
 import { Garment, GarmentDisplaySide } from "@/types/database";
 import { resolveGarmentImage } from "@/utils/outfit-state";
@@ -46,15 +47,17 @@ const SOFT_CANVASES: Record<string, string> = {
   brown: "#e7edf0",
   beige: "#e6ecef",
   cream: "#e4eaeb",
+  gold: "#eef3ea",
+  silver: "#eceff1",
   multicolor: "#efede8",
 };
 
 const ACCESSORY_PLACEMENTS: Placement[] = [
-  { left: "70%", top: "5%", width: "25%", height: "19%", zIndex: 7, rotate: "4deg" },
-  { left: "69%", top: "27%", width: "24%", height: "17%", zIndex: 8, rotate: "-5deg" },
-  { left: "3%", top: "67%", width: "24%", height: "17%", zIndex: 7, rotate: "-7deg" },
-  { left: "72%", top: "48%", width: "22%", height: "15%", zIndex: 8, rotate: "6deg" },
-  { left: "4%", top: "45%", width: "20%", height: "14%", zIndex: 8, rotate: "-4deg" },
+  { left: "58%", top: "0%", width: "42%", height: "28%", zIndex: 7, rotate: "5deg" },
+  { left: "58%", top: "20%", width: "42%", height: "26%", zIndex: 8, rotate: "-7deg" },
+  { left: "58%", top: "38%", width: "42%", height: "26%", zIndex: 7, rotate: "6deg" },
+  { left: "58%", top: "52%", width: "40%", height: "18%", zIndex: 8, rotate: "-5deg" },
+  { left: "58%", top: "30%", width: "42%", height: "24%", zIndex: 7, rotate: "4deg" },
 ];
 
 const ACCESSORY_POSITION_BY_SUBTYPE: Record<string, number> = {
@@ -62,12 +65,14 @@ const ACCESSORY_POSITION_BY_SUBTYPE: Record<string, number> = {
   beanie: 0,
   earbuds: 0,
   glasses: 1,
+  camera: 1,
   necklace: 2,
   belt: 2,
   watch: 3,
   bracelet: 3,
   ring: 3,
-  bag: 4,
+  bag: 2,
+  other: 1,
 };
 
 function canvasColor(items: FlatLayItem[]) {
@@ -78,18 +83,54 @@ function canvasColor(items: FlatLayItem[]) {
   return SOFT_CANVASES[dominant?.garment.color ?? "multicolor"];
 }
 
+function pct(value: number): Percent {
+  return `${Math.round(value * 10) / 10}%`;
+}
+
+function parsePct(value: Percent): number {
+  return Number.parseFloat(value);
+}
+
+function scalePlacement(
+  placement: Placement,
+  factor: number,
+  options: { keepTop?: boolean; keepBottom?: boolean } = {}
+): Placement {
+  const width = parsePct(placement.width);
+  const height = parsePct(placement.height);
+  const left = parsePct(placement.left);
+  const top = parsePct(placement.top);
+  const nextWidth = width * factor;
+  const nextHeight = height * factor;
+  let nextLeft = left - (nextWidth - width) / 2;
+  let nextTop = top - (nextHeight - height) / 2;
+  if (options.keepTop) nextTop = top;
+  if (options.keepBottom) nextTop = top + height - nextHeight;
+  nextLeft = Math.max(0, Math.min(nextLeft, 100 - nextWidth));
+  nextTop = Math.max(0, Math.min(nextTop, 100 - nextHeight));
+  return {
+    ...placement,
+    left: pct(nextLeft),
+    top: pct(nextTop),
+    width: pct(nextWidth),
+    height: pct(nextHeight),
+  };
+}
+
 function basePlacement(
   item: FlatLayItem,
   sagMode: boolean,
   hasOuterwear: boolean,
-  sparseLayout: boolean
+  sparseLayout: boolean,
+  hasAccessories: boolean
 ): Placement {
+  const sideRoom = hasAccessories && !sparseLayout;
   switch (item.slot) {
     case "dress":
       return {
-        left: sparseLayout ? "2%" : "4%",
+        left: sideRoom ? "2%" : sparseLayout ? "2%" : "4%",
         top: "3%",
-        width: sparseLayout ? "88%" : "72%",
+        width: sideRoom ? "62%" : sparseLayout ? "88%" : "72%",
         height: sparseLayout ? "82%" : "74%",
         zIndex: 3,
       };
@@ -97,46 +138,82 @@ function basePlacement(
       return {
         left: "0%",
         top: "1%",
-        width: sparseLayout ? "86%" : "68%",
-        height: sparseLayout ? "48%" : "44%",
-        zIndex: 5,
+        width: "42%",
+        height: "50%",
+        zIndex: 4,
         rotate: "-2deg",
       };
     case "top":
-      return {
-        left: hasOuterwear ? "39%" : sparseLayout ? "0%" : "2%",
-        top: sparseLayout ? "1%" : "3%",
-        width: hasOuterwear ? "60%" : sparseLayout ? "88%" : "72%",
-        height: sparseLayout ? "46%" : "43%",
-        zIndex: 4,
-        rotate: "1deg",
-      };
+      if (hasOuterwear) {
+        return {
+          left: "34%",
+          top: "2%",
+          width: "42%",
+          height: "48%",
+          zIndex: 5,
+          rotate: "1deg",
+        };
+      }
+      return scalePlacement(
+        {
+          left: "0%",
+          top: "1%",
+          width: sideRoom ? "70%" : sparseLayout ? "90%" : "82%",
+          height: sparseLayout ? "52%" : "48%",
+          zIndex: 5,
+          rotate: "1deg",
+        },
+        1.25,
+        { keepTop: true }
+      );
     case "underwear":
-      return { left: "15%", top: "38%", width: "55%", height: "16%", zIndex: 2 };
+      return {
+        left: sideRoom ? "2%" : "8%",
+        top: "30%",
+        width: sideRoom ? "62%" : "76%",
+        height: "60%",
+        zIndex: 2,
+      };
     case "bottom":
       return {
-        left: sparseLayout ? "1%" : sagMode ? "8%" : "4%",
-        top: sagMode ? "43%" : sparseLayout ? "38%" : "39%",
-        width: sparseLayout ? "78%" : "65%",
-        height: sagMode ? "55%" : sparseLayout ? "61%" : "58%",
-        zIndex: 3,
+        left: sideRoom
+          ? sagMode
+            ? "2%"
+            : "2%"
+          : sagMode
+            ? "8%"
+            : sparseLayout
+              ? "1%"
+              : "4%",
+        top: sagMode ? "41%" : sparseLayout ? "38%" : "39%",
+        width: sideRoom
+          ? sagMode
+            ? "62%"
+            : "62%"
+          : sagMode
+            ? "76%"
+            : sparseLayout
+              ? "78%"
+              : "65%",
+        height: sagMode ? "54%" : sparseLayout ? "61%" : "58%",
+        zIndex: 4,
         rotate: "-1deg",
       };
     case "shoes":
       return {
-        left: sparseLayout ? "46%" : "50%",
-        top: sparseLayout ? "72%" : "75%",
-        width: sparseLayout ? "52%" : "48%",
+        left: "58%",
+        top: "76%",
+        width: "42%",
         height: "24%",
         zIndex: 6,
-        rotate: "3deg",
+        rotate: "4deg",
       };
     default:
       return ACCESSORY_PLACEMENTS[0];
   }
 }
 
-export function FlatLayCollage({
+export const FlatLayCollage = memo(function FlatLayCollage({
   items,
   onGarmentPress,
   onItemPress,
@@ -158,7 +235,7 @@ export function FlatLayCollage({
   const accessoryPlacement = new Map<string, Placement>();
   for (const accessory of accessories) {
     const preferred =
-      ACCESSORY_POSITION_BY_SUBTYPE[accessory.garment.subtype ?? "other"] ?? 4;
+      ACCESSORY_POSITION_BY_SUBTYPE[accessory.garment.subtype ?? "other"] ?? 1;
     let index = preferred;
     let probes = 0;
     while (
@@ -169,11 +246,23 @@ export function FlatLayCollage({
       probes += 1;
     }
     occupiedPlacements.add(index);
-    accessoryPlacement.set(
-      accessory.garment.id,
-      ACCESSORY_PLACEMENTS[index]
-    );
+    accessoryPlacement.set(accessory.garment.id, ACCESSORY_PLACEMENTS[index]);
   }
+
+  const placedItems = items
+    .map((item) => ({
+      item,
+      placement:
+        accessoryPlacement.get(item.garment.id) ??
+        basePlacement(
+          item,
+          sagMode,
+          hasOuterwear,
+          sparseLayout,
+          accessories.length > 0
+        ),
+    }))
+    .sort((a, b) => a.placement.zIndex - b.placement.zIndex);
 
   return (
     <View accessibilityLabel={accessibilityLabel}>
@@ -181,32 +270,37 @@ export function FlatLayCollage({
         className="w-full overflow-hidden rounded-2xl"
         style={{ aspectRatio: 0.78, backgroundColor: canvasColor(items) }}
       >
-        {items.map((item) => {
-          const placement =
-            accessoryPlacement.get(item.garment.id) ??
-            basePlacement(item, sagMode, hasOuterwear, sparseLayout);
-
-          return (
-            <Pressable
-              key={`${item.slot}:${item.garment.id}`}
-              accessibilityRole="button"
-              accessibilityLabel={`${item.garment.name}, ${
-                item.display_side === "back" ? "back" : "front"
-              }, ${item.slot.replace(":", " ")}`}
-              onPress={() =>
-                onItemPress ? onItemPress(item) : onGarmentPress(item.garment)
-              }
-              hitSlop={4}
+        {placedItems.map(({ item, placement }) => (
+          <Pressable
+            key={`${item.slot}:${item.garment.id}`}
+            accessibilityRole="button"
+            accessibilityLabel={`${item.garment.name}, ${
+              item.display_side === "back" ? "back" : "front"
+            }, ${item.slot.replace(":", " ")}`}
+            onPress={() =>
+              onItemPress ? onItemPress(item) : onGarmentPress(item.garment)
+            }
+            hitSlop={4}
+            style={{
+              position: "absolute",
+              left: placement.left,
+              top: placement.top,
+              width: placement.width,
+              height: placement.height,
+              zIndex: placement.zIndex,
+              elevation: placement.zIndex,
+              transform: placement.rotate
+                ? [{ rotate: placement.rotate }]
+                : undefined,
+            }}
+          >
+            <View
               style={{
-                position: "absolute",
-                left: placement.left,
-                top: placement.top,
-                width: placement.width,
-                height: placement.height,
-                zIndex: placement.zIndex,
-                transform: placement.rotate
-                  ? [{ rotate: placement.rotate }]
-                  : undefined,
+                width: "100%",
+                height: "100%",
+                justifyContent:
+                  item.slot === "underwear" ? "flex-start" : "center",
+                overflow: "hidden",
               }}
             >
               <Image
@@ -215,11 +309,14 @@ export function FlatLayCollage({
                 }}
                 accessibilityIgnoresInvertColors
                 resizeMode="contain"
-                style={{ width: "100%", height: "100%" }}
+                style={{
+                  width: "100%",
+                  height: item.slot === "underwear" ? "88%" : "100%",
+                }}
               />
-            </Pressable>
-          );
-        })}
+            </View>
+          </Pressable>
+        ))}
       </View>
 
       {showLabels && (
@@ -228,9 +325,7 @@ export function FlatLayCollage({
             <Pressable
               key={`label:${item.slot}:${item.garment.id}`}
               onPress={() =>
-                onItemPress
-                  ? onItemPress(item)
-                  : onGarmentPress(item.garment)
+                onItemPress ? onItemPress(item) : onGarmentPress(item.garment)
               }
               accessibilityRole="button"
               className="rounded-full bg-stone-100 px-2 py-1"
@@ -248,4 +343,4 @@ export function FlatLayCollage({
       )}
     </View>
   );
-}
+});

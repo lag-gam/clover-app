@@ -42,7 +42,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "test:features": "tsc src/utils/math.ts src/utils/outfit-state.ts src/utils/bounded-batch.ts src/utils/closet-layout.ts --ignoreConfig --target es2020 --module commonjs --outDir .feature-test-build --skipLibCheck && node --test tests/feature-set.test.cjs"
+    "test:features": "tsc src/utils/math.ts src/utils/outfit-state.ts src/utils/bounded-batch.ts src/utils/closet-layout.ts src/utils/laundry.ts --ignoreConfig --target es2020 --module commonjs --outDir .feature-test-build --skipLibCheck && node --test tests/feature-set.test.cjs"
   },
   "private": true
 }

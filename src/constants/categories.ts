@@ -53,7 +53,8 @@ export const METAL_TONES: MetalTone[] = [
 
 export const COLORS: GarmentColor[] = [
   "black", "white", "gray", "navy", "blue", "red", "pink",
-  "green", "yellow", "orange", "purple", "brown", "beige", "cream", "multicolor",
+  "green", "yellow", "orange", "purple", "brown", "beige", "cream", "gold",
+  "silver", "multicolor",
 ];
 
 export const PATTERNS: GarmentPattern[] = [
@@ -63,7 +64,7 @@ export const PATTERNS: GarmentPattern[] = [
 
 export const MATERIALS: GarmentMaterial[] = [
   "cotton", "polyester", "silk", "wool", "denim",
-  "leather", "linen", "nylon", "cashmere", "synthetic blend", "other",
+  "leather", "linen", "nylon", "cashmere", "synthetic blend", "metal", "other",
 ];
 
 export const FITS: GarmentFit[] = ["slim", "regular", "relaxed", "oversized"];

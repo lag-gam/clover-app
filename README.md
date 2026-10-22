@@ -54,10 +54,13 @@ supabase secrets set OPENAI_API_KEY=your-openai-key REMOVEBG_API_KEY=your-remove
 supabase functions deploy process-garment
 ```
 
-Failed garments now show the actual analysis step on the garment screen.
-Watch live processor logs with:
+Failed garments show the actual analysis error and a step-by-step log
+on the garment screen. Apply migration `013_garment_processing_events.sql`
+so those logs persist in the database, then deploy the processor.
 
 ```bash
+npx supabase db push
+npx supabase functions deploy process-garment
 npx supabase functions logs process-garment --follow
 ```
 

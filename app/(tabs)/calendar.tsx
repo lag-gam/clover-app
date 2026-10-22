@@ -24,23 +24,10 @@ import {
   scheduleOutfit,
 } from "@/services/calendar.service";
 import { OutfitSchedule, OutfitWithItems } from "@/types/database";
+import { displayOutfitName } from "@/utils/outfit-state";
+import { localDateKey, parseLocalDateKey } from "@/utils/date";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-function pad(value: number) {
-  return String(value).padStart(2, "0");
-}
-
-export function localDateKey(date: Date) {
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
-    date.getDate()
-  )}`;
-}
-
-function parseLocalDateKey(value: string) {
-  const [year, month, day] = value.split("-").map(Number);
-  return new Date(year, month - 1, day, 12);
-}
 
 function monthBounds(month: Date) {
   return {
@@ -49,14 +36,11 @@ function monthBounds(month: Date) {
   };
 }
 
-function outfitLabel(outfit: OutfitWithItems) {
-  return (
-    outfit.name ||
-    `Outfit · ${new Intl.DateTimeFormat(undefined, {
-      month: "short",
-      day: "numeric",
-    }).format(new Date(outfit.created_at))}`
-  );
+function outfitLabel(
+  outfit: OutfitWithItems,
+  savedOutfits: OutfitWithItems[]
+) {
+  return displayOutfitName(outfit, savedOutfits);
 }
 
 export default function CalendarScreen() {
@@ -344,7 +328,7 @@ export default function CalendarScreen() {
             <Text className="ml-2 flex-1 text-sm font-medium text-clover-800">
               {reschedulingId
                 ? "Choose a new date for this outfit."
-                : `Scheduling “${outfitLabel(selectedOutfit!)}” — tap a date.`}
+                : `Scheduling “${outfitLabel(selectedOutfit!, outfits)}” — tap a date.`}
             </Text>
             <TouchableOpacity
               onPress={() => {
@@ -359,9 +343,10 @@ export default function CalendarScreen() {
         )}
 
         <Text className="text-xs font-bold uppercase tracking-wider text-stone-500">
-          Choose an outfit to schedule
+          Schedule a look
         </Text>
         {outfits.length > 0 ? (
+          <>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -390,22 +375,56 @@ export default function CalendarScreen() {
                     }`}
                     numberOfLines={1}
                   >
-                    {outfitLabel(outfit)}
+                    {outfitLabel(outfit, outfits)}
                   </Text>
                 </TouchableOpacity>
               );
             })}
           </ScrollView>
+            {selectedOutfit && (
+              <TouchableOpacity
+                onPress={() => router.push(`/outfit/${selectedOutfit.id}`)}
+                accessibilityRole="button"
+                accessibilityLabel={`View ${outfitLabel(selectedOutfit, outfits)}`}
+                className="mb-3 overflow-hidden rounded-2xl border border-clover-200 bg-white p-3"
+              >
+                <View className="mb-2 flex-row items-center justify-between">
+                  <Text className="text-base font-bold text-stone-900">
+                    {outfitLabel(selectedOutfit, outfits)}
+                  </Text>
+                  <Text className="text-xs font-semibold text-clover-700">
+                    View
+                  </Text>
+                </View>
+                <FlatLayCollage
+                  items={selectedOutfit.items}
+                  showLabels={false}
+                  onGarmentPress={() =>
+                    router.push(`/outfit/${selectedOutfit.id}`)
+                  }
+                  accessibilityLabel={`${outfitLabel(
+                    selectedOutfit,
+                    outfits
+                  )} preview`}
+                />
+              </TouchableOpacity>
+            )}
+          </>
         ) : (
           <TouchableOpacity
-            onPress={() => router.push("/outfit/create")}
+            onPress={() =>
+              router.push({
+                pathname: "/(tabs)/closet",
+                params: { view: "outfits" },
+              })
+            }
             className="my-3 items-center rounded-xl border border-dashed border-stone-300 bg-white px-4 py-5"
           >
             <Text className="font-semibold text-stone-600">
-              Create an outfit first
+              No looks to schedule yet
             </Text>
             <Text className="mt-1 text-xs text-stone-400">
-              Saved outfits can be added to any date.
+              Saved outfits live in Closet → Outfits.
             </Text>
           </TouchableOpacity>
         )}
@@ -461,7 +480,7 @@ export default function CalendarScreen() {
                 className="flex-1"
               >
                 <Text className="text-base font-bold text-stone-900">
-                  {outfitLabel(schedule.outfit)}
+                  {outfitLabel(schedule.outfit, outfits)}
                 </Text>
                 <Text className="mt-0.5 text-xs text-stone-400">
                   {schedule.outfit.items.length} pieces
@@ -476,7 +495,8 @@ export default function CalendarScreen() {
                 router.push(`/garment/${garment.id}`)
               }
               accessibilityLabel={`${outfitLabel(
-                schedule.outfit
+                schedule.outfit,
+                outfits
               )} collage preview`}
             />
             <View className="mt-3 flex-row gap-2">

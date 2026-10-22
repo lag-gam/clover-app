@@ -9,6 +9,7 @@ import {
   GarmentFit,
   GarmentMaterial,
   GarmentPattern,
+  GarmentProcessingEvent,
   GarmentSubtype,
   MetalTone,
 } from "@/types/database";
@@ -226,15 +227,38 @@ export async function createPendingGarments(
   return { garments, failures };
 }
 
+async function describeFunctionsError(error: unknown): Promise<string> {
+  if (!error || typeof error !== "object") {
+    return "Could not start analysis. Please retry.";
+  }
+  const err = error as { message?: string; context?: Response };
+  let detail = err.message?.trim() || "unknown invoke error";
+  try {
+    if (err.context && typeof err.context.text === "function") {
+      const body = (await err.context.text()).replace(/\s+/g, " ").trim();
+      if (body) detail = `${detail}: ${body.slice(0, 220)}`;
+    }
+  } catch {
+    // The Functions error body is optional diagnostic text.
+  }
+  return `Could not start analysis. ${detail}`.slice(0, 280);
+}
+
 export function queueGarmentProcessing(garmentId: string): void {
   void supabase.functions
     .invoke("process-garment", { body: { garmentId } })
-    .then(({ error }) => {
+    .then(async ({ error }) => {
       if (error) {
-        return markDispatchFailed(garmentId);
+        const detail = await describeFunctionsError(error);
+        console.error("process-garment invoke failed", detail);
+        return markDispatchFailed(garmentId, detail);
       }
     })
-    .catch(() => markDispatchFailed(garmentId));
+    .catch(async (error) => {
+      const detail = await describeFunctionsError(error);
+      console.error("process-garment invoke crashed", detail);
+      return markDispatchFailed(garmentId, detail);
+    });
 }
 
 export async function uploadGarmentBackImage(
@@ -285,12 +309,15 @@ export async function uploadGarmentBackImage(
   return data as Garment;
 }
 
-async function markDispatchFailed(garmentId: string): Promise<void> {
+async function markDispatchFailed(
+  garmentId: string,
+  processingError: string
+): Promise<void> {
   const { error } = await supabase
     .from("garments")
     .update({
       processing_status: "failed",
-      processing_error: "Could not start analysis. Please retry.",
+      processing_error: processingError,
       processing_completed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
@@ -313,6 +340,24 @@ export async function retryGarmentProcessing(garmentId: string): Promise<void> {
     throw new Error("Analysis is already running or is not retryable yet.");
   }
   queueGarmentProcessing(garmentId);
+}
+
+export async function fetchGarmentProcessingEvents(
+  garmentId: string
+): Promise<GarmentProcessingEvent[]> {
+  const { data, error } = await supabase
+    .from("garment_processing_events")
+    .select(
+      "id, garment_id, user_id, attempt, stage, status, message, details, created_at"
+    )
+    .eq("garment_id", garmentId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.warn("Could not load garment analysis logs:", error.message);
+    return [];
+  }
+  return (data ?? []) as GarmentProcessingEvent[];
 }
 
 export async function fetchGarments(

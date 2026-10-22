@@ -202,9 +202,13 @@ export default function SeededStyleScreen() {
     try {
       const saved = await saveOutfit(user.id, looks[index], true);
       await logInteraction(user.id, saved.outfit.id, "selected");
+      await logInteraction(user.id, saved.outfit.id, "liked");
       maybeRecalculate();
       setSavedIndexes((current) => new Set(current).add(index));
-      Alert.alert("Look saved", "Your edited look is ready for the calendar.");
+      Alert.alert(
+        "Look saved",
+        "Find it in Closet under the Outfits tab."
+      );
     } catch (saveError) {
       Alert.alert(
         "Could not save look",
